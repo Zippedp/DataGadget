@@ -11,9 +11,10 @@ private:
   bool last_state = false;
   bool is_pullup = false;
   bool valid_interaction = false;
+  bool toggle_is_on = false;
   
-  unsigned int last_check = 0;
-  unsigned int deBounce_intvl = 5;
+  unsigned long last_check = 0;
+  int deBounce_intvl = 5;
 
 public:
   Button(){}

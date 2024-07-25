@@ -6,8 +6,18 @@ Timer::Timer(String _name){
 
   long Timer::time(){
     if(is_started){
-      time_now += millis() - time_prev;
-      time_prev = millis();
+      unsigned long time_temp = millis();
+      time_now += time_temp - time_prev;
+      time_prev = time_temp;
     }
     return time_now;
+  }
+
+  void Timer::changeState(){
+    toggle = ! toggle;
+    if(toggle){
+      start();
+    }else{
+      stop();
+    }
   }

@@ -22,7 +22,7 @@ void Button::init(bool _is_pullup){
 }
 
 void Button::dbRead(){
-    unsigned int currentTime = millis();
+    unsigned long currentTime = millis();
     if(currentTime - last_check >= deBounce_intvl){
         state = digitalRead(pin);
         if(is_pullup){
@@ -65,14 +65,10 @@ return valid_interaction;
 }
 
 bool Button::toggle(){
-dbRead();
 
-if(state == last_state){
-    last_state = state;
-}else{
-    valid_interaction = !valid_interaction;
-    last_state = state;
+if(pressed()){
+    toggle_is_on = !toggle_is_on;
 }
 
-return valid_interaction;
+return toggle_is_on;
 }

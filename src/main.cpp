@@ -1,124 +1,64 @@
 #include <Arduino.h>
+
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
 #include <SD.h>
-File myFile;
+
+#include "Button.h"
+#include "Timer.h"
 
 // screen define
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // pin define
 #define button_1 D1
 #define button_2 D2
 #define button_3 D3
 
-// serial delay
-const int serial_intvl = 20;
-int serial_prev = 0;
+File myFile;
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-// save delay
+
+// refresh rate
+const int refresh_intvl = 20;
+unsigned long refresh_prev = 0;
+
+// save setting
 const int save_intvl = 10000;
-int save_prev = 0;
+unsigned long save_prev = 0;
 
 // button var setup
-const byte buttonPins[] = {button_1, button_2, button_3};
-const int button_deBounce_intvl = 5;
-int button_prevDe[] = {0, 0, 0};
-byte button_state[] = {0, 0, 0};
-byte button_passState[] = {0, 0, 0};
-byte temp[] = {0, 0, 0};
+const int numButtons = 3;
+const byte buttonPins[numButtons] = {button_1, button_2, button_3};
+Button* buttons[numButtons];
 
 // timer var setup
-String timer_name[] = {"Game", "Study", "Video"};
-long time_add[] = {0, 0, 0};
-long time_last[] = {0, 0, 0};
-long timer[] = {0, 0, 0};
-bool button_is_pressed[] = {false, false, false};
-bool timer_is_start[] = {false, false, false};
+const int numTimer = 3;
+String timer_name[numTimer] = {"XP", "AP", "RP"};
+Timer* timers[numTimer];
 
-
-// for debounce switch readings
-void button_deBounce(){
-  for(unsigned int index=0; index<sizeof(buttonPins); index++){
-    if(millis()-button_state[index] >= button_deBounce_intvl){
-      button_state[index] = digitalRead(buttonPins[index]);
-      button_prevDe[index] = millis();
-    }
-  }
-}
-
-void buttonReleaseCheck(){
-  for(unsigned int index=0; index<sizeof(buttonPins); index++){
-    button_passState[index] = 0;
-    if(button_state[index] == 1){
-      temp[index] = 1;
-    }else{
-      if(temp[index] == 1){
-        button_passState[index] = 1;
-        temp[index] = 0;
-      }
-    }
-  }
-}
-
-void updateText(long time_last[]){
-  display.clearDisplay();
-
-  display.setTextSize(1.5);             // Normal 1:1 pixel scale
-  display.setTextColor(SSD1306_WHITE);        // Draw white text
-  display.setCursor(0,0);             // Start at top-left corner
-  for(unsigned int index=0; index<sizeof(buttonPins); index++){
-    display.print(timer_name[index]);
-    display.print(": ");
-    display.print(int(time_last[index]/(1000UL*60*60)));
-    display.print("h ");
-    display.print(int((time_last[index]/(1000UL*60))%60));
-    display.print("min ");
-    display.print(int((time_last[index]/1000)%60));
-    display.println("s ");
-  }
-
-  display.display();
-  // testdrawstyles();
-}
-
+// update text on oled
+void updateText();
 // separate lable and data
-void parseLine(String line) {
-  int separatorIndex = line.indexOf(':');
-  if (separatorIndex != -1) {
-    // data separate
-    String label = line.substring(0, separatorIndex); // lable
-    String valueStr = line.substring(separatorIndex + 1); // data
-    long value = atol(valueStr.c_str()); // to long
-    // load data to var
-    if(label == timer_name[0]) {
-      timer[0] = value;
-    }else if(label == timer_name[1]) {
-      timer[1] = value;
-    }else if(label == timer_name[2]) {
-      timer[2] = value;
-    }else{
-      Serial.print("Unknown label: ");
-    }
-    Serial.print(label);
-    Serial.print(": ");
-    Serial.println(value);
-  }else{
-    Serial.println("Error: Invalid line format.");
-  }
-}
+void parseLine(String line);
+// exclusive timer
+void exCheck(int index);
 
 void setup() {
   Serial.begin(19200);
-  //pin config
-  pinMode(button_1, INPUT);
-  pinMode(button_2, INPUT);
-  pinMode(button_3, INPUT);
+  
+  for(int i=0; i<numButtons; i++){
+    buttons[i] = new Button(buttonPins[i]);
+    buttons[i]->init();
+  }
+
+  for(int i=0; i<numTimer; i++){
+    timers[i] = new Timer(timer_name[i]);
+  }
 
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
@@ -155,7 +95,7 @@ void setup() {
     // create save.txt
     if(myFile){
       Serial.print("Writing to save.txt...");
-      for(unsigned int index=0; index<sizeof(buttonPins); index++){
+      for(int index=0; index<numTimer; index++){
         myFile.print(timer_name[index]);
         myFile.print(":");
         myFile.println(0);
@@ -169,55 +109,91 @@ void setup() {
 }
 
 void loop() {
-  // process reading
-  button_deBounce();
-  buttonReleaseCheck();
-
-  // print to serial
-  if(millis()-serial_prev >= serial_intvl){
-    for(unsigned int index=0; index<sizeof(buttonPins); index++){
-      // button_passState[index] = button_state[index];
-      Serial.print(button_passState[index]);
-      Serial.print(" ");
-
-      if(button_passState[index] > 0){
-        if(timer_is_start[index]){
-          timer_is_start[index] = false;
-        }else{
-          timer_is_start[index] = true;
-          time_last[index] = millis();
-        }
+  unsigned long refresh_temp = millis();
+  if(refresh_temp-refresh_prev >= refresh_intvl){
+    for(int i=0; i<numButtons; i++){
+      if(buttons[i]->pressed()){
+        timers[i]->changeState();
+        exCheck(i);
+        Serial.print("Button: ");
+        Serial.println(i);
       }
-
-      if(timer_is_start[index]){
-        for(unsigned int p=0; p<sizeof(buttonPins); p++){
-          if(p != index){
-            timer_is_start[p] = false;
-          }
-        }
-        time_add[index] = millis() - time_last[index];
-        timer[index] = timer[index] + time_add[index];
-        time_last[index] = millis();
-        }
-      
-        if(millis()-save_prev >= save_intvl){
-        myFile = SD.open("save.txt", FILE_WRITE | O_TRUNC);
-        if(myFile){
-            for(unsigned int index=0; index<sizeof(buttonPins); index++){
-              myFile.print(timer_name[index]);
-              myFile.print(":");
-              myFile.println(timer[index]);
-            }
-          }else {
-            Serial.println("error opening save.txt");
-          }
-        myFile.close();
-        save_prev = millis();
-        }
     }
-    Serial.println("");
-    serial_prev = millis();
+    for(int i=0; i<numTimer; i++){
+      timers[i]->time();
+    }
+    updateText();
+    refresh_prev = refresh_temp;
   }
 
-  updateText(timer);
+  unsigned long save_temp = millis();
+  if(save_temp-save_prev >= save_intvl){
+    for(int index=0; index<numTimer; index++){
+      myFile = SD.open("save.txt", FILE_WRITE | O_TRUNC);
+      if(myFile){
+        for(int index=0; index<numTimer; index++){
+          myFile.print(timer_name[index]);
+          myFile.print(":");
+          myFile.println(timers[index]->time());
+        }
+      }else {
+          Serial.println("error opening save.txt");
+      }
+      myFile.close();
+    }
+    save_prev = save_temp;
+  }
+    
+}
+
+void updateText(){
+  display.clearDisplay();
+
+  display.setTextSize(1.5);             // Normal 1:1 pixel scale
+  display.setTextColor(SSD1306_WHITE);        // Draw white text
+  display.setCursor(0,0);             // Start at top-left corner
+  for(int index=0; index<numTimer; index++){
+    display.print(timers[index]->name);
+    display.print(": ");
+    display.print(timers[index]->toHours());
+    display.print("h ");
+    display.print(timers[index]->toMinutes());
+    display.print("min ");
+    display.print(timers[index]->toSeconds());
+    display.println("s ");
+  }
+
+  display.display();
+  // testdrawstyles();
+}
+
+void parseLine(String line) {
+  int separatorIndex = line.indexOf(':');
+  if(separatorIndex != -1) {
+    // data separate
+    String label = line.substring(0, separatorIndex); // lable
+    String valueStr = line.substring(separatorIndex + 1); // data
+    long value = atol(valueStr.c_str()); // to long
+    // load data to var
+    for(int i=0; i<numTimer; i++){
+      if(label == timers[i]->name) {
+        timers[i]->loadSave(value);
+      }else{
+        Serial.print("Unknown label: ");
+        Serial.print(label);
+        Serial.print(": ");
+        Serial.println(value);
+      }
+    }
+  }else{
+    Serial.println("Error: Invalid line format.");
+  }
+}
+
+void exCheck(int index){
+  for(int i=0; i<numTimer; i++){
+    if(i != index){
+      timers[i]->is_started = false;
+    }
+  }
 }

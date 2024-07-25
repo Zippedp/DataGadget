@@ -8,10 +8,11 @@ class Timer
 private:
     long time_now = 0;
     long time_prev = 0;
-    bool is_started = false;
+    bool toggle = false;
 
 public:
-    String name = "TimerName";
+    String name;
+    bool is_started = false;
 
     Timer(){}
     Timer(String _name); // create with a name
@@ -44,6 +45,8 @@ public:
     inline void stop(){
         is_started = false;
     }
+
+    void changeState();
 };
 
 #endif
