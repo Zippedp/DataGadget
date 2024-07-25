@@ -33,49 +33,6 @@ byte button_state[] = {0, 0, 0};
 byte button_passState[] = {0, 0, 0};
 byte temp[] = {0, 0, 0};
 
-class Button
-{
-private:
-  byte pin;
-  bool is_pressed = false;
-  bool is_pressing = false;
-  bool valid_press = false;
-  unsigned int last_check = 0;
-  unsigned int deBounce_intvl = 5;
-
-public:
-  Button(){}
-  Button(byte _pin){
-    pin = _pin;
-  }
-  Button(byte _pin, int _deBounce_intvl){
-    pin = _pin;
-    deBounce_intvl = _deBounce_intvl;
-  }
-  
-  bool prRead(){
-    unsigned int currentTime = millis();
-    if(currentTime - last_check >= deBounce_intvl){
-      is_pressed = digitalRead(pin);
-      last_check = currentTime;
-    }
-
-    valid_press = false;
-    if(is_pressed == true){
-      is_pressing = true;
-    }else{
-      if(is_pressing == true){
-        valid_press = true;
-        is_pressing = false;
-      }
-    }
-    
-    return valid_press;
-  }
-};
-
-
-
 // timer var setup
 String timer_name[] = {"Game", "Study", "Video"};
 long time_add[] = {0, 0, 0};
@@ -83,34 +40,6 @@ long time_last[] = {0, 0, 0};
 long timer[] = {0, 0, 0};
 bool button_is_pressed[] = {false, false, false};
 bool timer_is_start[] = {false, false, false};
-
-class Timer
-{
-private:
-  long time_prev = 0;
-public:
-  String name = "TimerName";
-  long time = 0;
-  bool timer_is_start = false;
-
-  Timer(){}
-  Timer(String _name){
-    name = _name;
-  }
-
-  void init(long _time){
-    time = _time;
-  }
-
-  void start(){
-    timer_is_start = true;
-  }
-
-  void update(){
-    time = time + (millis() - time_prev);
-    time_prev = millis();
-  }
-};
 
 
 // for debounce switch readings

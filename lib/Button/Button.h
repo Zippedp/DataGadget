@@ -17,24 +17,17 @@ private:
 
 public:
   Button(){}
-  Button(byte _pin){}
-  Button(byte _pin, int _deBounce_intvl){
-    // pin config
-    // debounce interval config
-  }
+  Button(byte _pin);;
+  Button(byte _pin, int _deBounce_intvl); // debounce interval config
 
-  void init(){
-    // Default using external pullup resistor
-  }
-  void init(bool _is_pullup){
-    // true to config using internal pullup resistor
-  }
+  void init(); // Default using external pullup resistor
+  void init(bool _is_pullup); // true to config using internal pullup resistor
 
-  void dbRead(){} //debounce digital read
+  void dbRead(); //debounce digital read
 
-  bool pressed(){} //press detect trigger
-  bool released(){} //release detect trigger
-  bool toggle(){} // on & off toggle
+  bool pressed(); //press detect trigger
+  bool released(); //release detect trigger
+  bool toggle(); // on & off toggle
 };
 
 #endif
