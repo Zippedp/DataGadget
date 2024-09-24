@@ -50,10 +50,10 @@ void exCheck(int index);
 
 void setup() {
   Serial.begin(19200);
-  
+  // create buttons class
   for(int i=0; i<numButtons; i++){
     buttons[i] = new Button(buttonPins[i]);
-    buttons[i]->init();
+    buttons[i]->init(true);
   }
 
   for(int i=0; i<numTimer; i++){
@@ -109,6 +109,7 @@ void setup() {
 }
 
 void loop() {
+  bool all_timer_stopped = true;
   unsigned long refresh_temp = millis();
   if(refresh_temp-refresh_prev >= refresh_intvl){
     for(int i=0; i<numButtons; i++){
@@ -118,16 +119,20 @@ void loop() {
         Serial.print("Button: ");
         Serial.println(i);
       }
-    }
-    for(int i=0; i<numTimer; i++){
+
       timers[i]->time();
+      if(timers[i]->is_started){
+        all_timer_stopped = false;
+      }
     }
+    
+    // Serial.println(all_timer_stopped);
     updateText();
     refresh_prev = refresh_temp;
   }
 
   unsigned long save_temp = millis();
-  if(save_temp-save_prev >= save_intvl){
+  if(save_temp-save_prev >= save_intvl && !all_timer_stopped){
     for(int index=0; index<numTimer; index++){
       myFile = SD.open("save.txt", FILE_WRITE | O_TRUNC);
       if(myFile){
@@ -141,6 +146,7 @@ void loop() {
       }
       myFile.close();
     }
+    Serial.println("saved");
     save_prev = save_temp;
   }
     
