@@ -18,7 +18,7 @@ private:
 
 public:
   Button(){}
-  Button(byte _pin);;
+  Button(byte _pin);
   Button(byte _pin, int _deBounce_intvl); // debounce interval config
 
   void init(); // Default using external pullup resistor

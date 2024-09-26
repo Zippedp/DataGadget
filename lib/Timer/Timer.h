@@ -6,12 +6,12 @@
 class Timer
 {
 private:
-    long time_now = 0;
     long time_prev = 0;
     bool toggle = false;
 
 public:
     String name;
+    long time_now = 0;
     bool is_started = false;
 
     Timer(){}
