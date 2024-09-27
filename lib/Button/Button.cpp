@@ -72,3 +72,8 @@ if(pressed()){
 
 return toggle_is_on;
 }
+
+bool Button::readNow(){
+    dbRead();
+    return state;
+}

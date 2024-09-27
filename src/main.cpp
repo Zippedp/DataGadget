@@ -36,6 +36,15 @@ const int numTimer = 3;
 String timer_name[numTimer] = {"WOK", "EXP", "ENT"};
 Timer* timers[numTimer];
 
+// multi press config
+// const unsigned int countDownTime = 3000;
+int countMs = 0;
+const int countDownTime = 3000;
+unsigned long countDown_prev = 0;
+unsigned long multPress_prev = 0;
+bool is_multPress = false;
+bool countDown_start = false;
+
 // save structure
 const int dictSize = 9;
 keyValuePair saveStrt[dictSize] = {
@@ -53,6 +62,12 @@ void updateText();
 void exCheck(int index);
 // display error massage on oled
 void displayMassage(String _text);
+// find top 1 timer
+void countTimer();
+// Key combination function
+bool multiplPresseCheck(int _button1, int _button2);
+
+bool countDown(int _countMs);
 
 void setup() {
   Serial.begin(19200);
@@ -90,30 +105,56 @@ void setup() {
 }
 
 void loop() {
-  bool all_timer_stopped = true;
-  unsigned long refresh_temp = millis();
-  if(refresh_temp-refresh_prev >= refresh_intvl){
-    for(int i=0; i<numButtons; i++){
-      if(buttons[i]->pressed()){
-        timers[i]->changeState();
-        exCheck(i);
-        Serial.print("Button: ");
-        Serial.println(i);
-      }
-
-      timers[i]->time();
-      if(timers[i]->is_started){
-        all_timer_stopped = false;
-      }
-      timerSave.saveDict[i].value = timers[i]->time_now;
+  // multi press function
+  if(multiplPresseCheck(0, 2)){
+    is_multPress = true;
+    if(countDown(countDownTime)){
+      countTimer();
+      delay(2000);
     }
-    
-    updateText();
+  }else{
+    is_multPress = false;
+    countDown_start = false;
+  }
+
+  bool all_timer_stopped = true;
+  if(!is_multPress){
+    // timer update
+    unsigned long refresh_temp = millis();
+    if(refresh_temp-refresh_prev >= refresh_intvl){
+      for(int i=0; i<numButtons; i++){
+        if(buttons[i]->pressed()){
+          timers[i]->changeState();
+          exCheck(i);
+          Serial.print("Button: ");
+          Serial.println(i);
+        }
+
+        timers[i]->time();
+        if(timers[i]->is_started){
+          all_timer_stopped = false;
+        }
+      }
+      // display oled text
+      updateText();
+      refresh_prev = refresh_temp;
+    }
+  }else{
+    unsigned long refresh_temp = millis();
+    if(refresh_temp-refresh_prev >= refresh_intvl){
+      for(int i=0; i<numButtons; i++){
+        timers[i]->stop();
+      }
+    }
     refresh_prev = refresh_temp;
   }
 
+  // save to sd card
   unsigned long save_temp = millis();
   if(save_temp-save_prev >= save_intvl && !all_timer_stopped){
+    for(int i=0; i<numButtons; i++){
+      timerSave.saveDict[i].value = timers[i]->time_now;
+    }
     timerSave.saveSD();
     save_prev = save_temp;
   }
@@ -154,4 +195,50 @@ void displayMassage(String _text){
   display.setCursor(10,28);
   display.print(_text);
   display.display();
+}
+
+void countTimer(){
+  long top1 = 0;
+  String top1Name = "name";
+  for(int i=0; i<numTimer; i++){
+    if(timers[i]->time_now > top1){
+      top1 = timers[i]->time_now;
+      top1Name = timers[i]->name;
+    }
+  }
+  displayMassage(top1Name);
+}
+
+bool multiplPresseCheck(int _button1, int _button2){
+  if(buttons[_button1]->readNow() && buttons[_button2]->readNow()){
+    return true;
+  }
+  return false;
+}
+
+bool countDown(int _countMs){
+  unsigned long countDown_temp = millis();
+
+  if(!countDown_start){
+    countDown_start = true;
+    countDown_prev = countDown_temp;
+    countMs = _countMs;
+    Serial.println(countMs);
+    displayMassage(String(countMs/1000));
+  }
+
+  if(countMs <= 0){
+    countDown_start = false;
+    displayMassage("countDown end");
+    delay(2000);
+    return true;
+  }else if(countDown_temp-countDown_prev >= 1000){
+    countMs -= 1000;
+    Serial.println(countMs);
+    displayMassage(String(countMs/1000));
+    countDown_prev = countDown_temp;
+  }
+
+  
+  return false;
 }

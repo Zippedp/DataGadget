@@ -14,7 +14,7 @@ private:
   bool toggle_is_on = false;
   
   unsigned long last_check = 0;
-  int deBounce_intvl = 5;
+  unsigned int deBounce_intvl = 5;
 
 public:
   Button(){}
@@ -29,6 +29,7 @@ public:
   bool pressed(); //press detect trigger
   bool released(); //release detect trigger
   bool toggle(); // on & off toggle
+  bool readNow(); //just return debounced read
 };
 
 #endif
