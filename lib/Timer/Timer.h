@@ -47,6 +47,7 @@ public:
     }
 
     void changeState();
+    void clear();
 };
 
 #endif

@@ -61,13 +61,19 @@ void updateText();
 // exclusive timer
 void exCheck(int index);
 // display error massage on oled
-void displayMassage(String _text);
+void displayMassage(String _text, bool _isFlash);
 // find top 1 timer
 void countTimer();
 // Key combination function
 bool multiplPresseCheck(int _button1, int _button2);
 
 bool countDown(int _countMs);
+
+int* time2score(long _time[], int _numValues);
+
+void multiplPressFn();
+
+// long findMax(long _inputs[]);
 
 void setup() {
   Serial.begin(19200);
@@ -95,7 +101,7 @@ void setup() {
   
   // load save from sd card
   if(timerSave.loadSDSave()){
-    displayMassage("* SD CARD ERROR *");
+    displayMassage("* SD CARD ERROR *", false);
     while(1); // trap here
   }
   for(int i=0; i<numTimer; i++){
@@ -105,17 +111,8 @@ void setup() {
 }
 
 void loop() {
-  // multi press function
-  if(multiplPresseCheck(0, 2)){
-    is_multPress = true;
-    if(countDown(countDownTime)){
-      countTimer();
-      delay(2000);
-    }
-  }else{
-    is_multPress = false;
-    countDown_start = false;
-  }
+  // all multi press function
+  multiplPressFn();
 
   bool all_timer_stopped = true;
   if(!is_multPress){
@@ -188,11 +185,28 @@ void exCheck(int index){
   }
 }
 
-void displayMassage(String _text){
+void displayMassage(String _text, bool _isFlash){
+  int16_t x1, y1;
+  uint16_t textWidth, textHeight;
+  display.getTextBounds(_text, 0, 0, &x1, &y1, &textWidth, &textHeight);
+  
+  int16_t x = (SCREEN_WIDTH - textWidth) / 2;
+  int16_t y = (SCREEN_HEIGHT - textHeight) / 2;
   display.clearDisplay();
+  display.setCursor(x,y);
   display.setTextSize(1.5);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(10,28);
+
+  if(_isFlash){
+    display.fillScreen(WHITE);
+    display.setTextColor(BLACK);
+    display.print(_text);
+    display.display();
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+  }else{
+    display.setTextColor(WHITE);
+  }
+
   display.print(_text);
   display.display();
 }
@@ -206,7 +220,7 @@ void countTimer(){
       top1Name = timers[i]->name;
     }
   }
-  displayMassage(top1Name);
+  displayMassage(top1Name, true);
 }
 
 bool multiplPresseCheck(int _button1, int _button2){
@@ -224,21 +238,112 @@ bool countDown(int _countMs){
     countDown_prev = countDown_temp;
     countMs = _countMs;
     Serial.println(countMs);
-    displayMassage(String(countMs/1000));
+    displayMassage(String(countMs/1000), true);
   }
 
   if(countMs <= 0){
     countDown_start = false;
-    displayMassage("countDown end");
+    displayMassage("countDown end", false);
     delay(2000);
     return true;
   }else if(countDown_temp-countDown_prev >= 1000){
     countMs -= 1000;
     Serial.println(countMs);
-    displayMassage(String(countMs/1000));
+    displayMassage(String(countMs/1000), true);
     countDown_prev = countDown_temp;
   }
 
   
   return false;
+}
+
+int* time2score(long _times[], int _numValues){
+  int maxScore = 0;
+  long totalTime = 0;
+  double tempScore[numTimer];
+  static int normalizedscore[numTimer];
+
+  double minTime = 36000000.0;    // 10h
+  double maxTime = 180000000.0;   // 50h
+  double coefficient = 0; // for min-max normalization
+
+  for(int i=0; i<_numValues; i++){
+    totalTime += _times[i];
+  }
+  for(int i=0; i<_numValues; i++){
+    tempScore[i] = ((double)_times[i]/totalTime)*_times[i];
+  }
+  for(int i=0; i<_numValues; i++){
+    if(_times[i] > maxScore){
+      maxScore = _times[i];
+    }
+  }
+
+  coefficient = 1.0 + ((double)(totalTime - minTime) / (maxTime - minTime)) * 4.0;
+  Serial.println(maxScore);
+  Serial.println(coefficient);
+
+  for(int i=0; i<_numValues; i++){
+    normalizedscore[i] = (tempScore[i]/maxScore)*coefficient;
+    Serial.print(_times[i]);
+    Serial.print(" - ");
+    Serial.print(tempScore[i]);
+    Serial.print(" - ");
+    Serial.println(normalizedscore[i]);
+  }
+  return normalizedscore;
+}
+
+// long findMax(long _inputs[]){
+//   long maxValue = 0;
+//   for(int i=0; i<sizeof(_inputs); i++){
+//     if(_inputs[i] > maxValue){
+//       maxValue = _inputs[i];
+//     }
+//   }
+//   return maxValue;
+// }
+
+void multiplPressFn(){
+  // fn1 score check
+  if(multiplPresseCheck(0, 1)){
+    is_multPress = true;
+
+    display.clearDisplay();
+    display.setTextSize(1.5);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0,0);
+    for(int index=0; index<numTimer; index++){
+      display.print(timers[index]->name);
+      display.print(": ");
+      display.println(timerSave.saveDict[index+3].value);
+    }
+    display.display();
+  }
+  // fn2 calculate score
+  else if(multiplPresseCheck(0, 2)){
+    is_multPress = true;
+    if(countDown(countDownTime)){
+      long tempInput[numTimer];
+      for(int i=0; i<numTimer; i++){
+        tempInput[i] = timers[i]->time_now;
+      }
+      int* score = time2score(tempInput, numTimer);
+      for(int i=0; i<dictSize; i++){
+        if(i<3){
+          timers[i]->clear();
+          timerSave.saveDict[i].value = 0;
+          Serial.println(timerSave.saveDict[i].value);
+        }else if(i>2 && i<6){
+          timerSave.saveDict[i].value += score[i-3];
+          Serial.println(timerSave.saveDict[i].value);
+        }
+      }
+      timerSave.saveSD();
+      delay(2000);
+    }
+  }else{
+    is_multPress = false;
+    countDown_start = false;
+  }
 }

@@ -33,7 +33,7 @@ void SDSave::readSave(){
   }else{
     // create save.txt
     Serial.println("File doesn't exist.");
-    myFile = SD.open(saveName, O_CREAT);
+    myFile = SD.open(saveName, FILE_WRITE);
     if(myFile){
       for(int index=0; index<dictSize; index++){
         myFile.print(saveDict[index].key);
