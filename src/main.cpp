@@ -11,9 +11,10 @@
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 
 // pin define
-#define button_1 D1
-#define button_2 D2
-#define button_3 D3
+#define button_1 D0
+#define button_2 D1
+#define button_3 D2
+#define button_4 D3
 
 // File myFile;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
@@ -27,13 +28,13 @@ const int save_intvl = 10000;
 unsigned long save_prev = 0;
 
 // button var setup
-const int numButtons = 3;
-const byte buttonPins[numButtons] = {button_1, button_2, button_3};
+const int numButtons = 4;
+const byte buttonPins[numButtons] = {button_1, button_2, button_3, button_4};
 Button* buttons[numButtons];
 
 // timer var setup
-const int numTimer = 3;
-String timer_name[numTimer] = {"WOK", "EXP", "ENT"};
+const int numTimer = 4;
+String timer_name[numTimer] = {"STY", "WOK", "EXP", "ENT"};
 Timer* timers[numTimer];
 
 // multi press config
@@ -46,11 +47,11 @@ bool is_multPress = false;
 bool countDown_start = false;
 
 // save structure
-const int dictSize = 9;
+const int dictSize = 12;
 keyValuePair saveStrt[dictSize] = {
-  {"t_work", 0}, {"t_explore", 0}, {"t_entertain", 0},
-  {"accum_1", 0}, {"accum_2", 0}, {"accum_3", 0},
-  {"parm_1", 0}, {"parm_2", 0}, {"parm_3", 0}
+  {"t_study", 0}, {"t_work", 0}, {"t_explore", 0}, {"t_entertain", 0},
+  {"accum_0", 0}, {"accum_1", 0}, {"accum_2", 0}, {"accum_3", 0},
+  {"parm_0", 0}, {"parm_1", 0}, {"parm_2", 0}, {"parm_3", 0}
 };
 // init sd save
 SDSave timerSave(A7, "save.txt", dictSize, saveStrt);
@@ -62,18 +63,14 @@ void updateText();
 void exCheck(int index);
 // display error massage on oled
 void displayMassage(String _text, bool _isFlash);
-// find top 1 timer
-void countTimer();
+// check all multi Press Fn
+void multiplPressFn();
 // Key combination function
 bool multiplPresseCheck(int _button1, int _button2);
-
+// multi Press Fn time2score countdown
 bool countDown(int _countMs);
-
+// normalize time to int 0-5
 int* time2score(long _time[], int _numValues);
-
-void multiplPressFn();
-
-// long findMax(long _inputs[]);
 
 void setup() {
   Serial.begin(19200);
@@ -104,6 +101,8 @@ void setup() {
     displayMassage("* SD CARD ERROR *", false);
     while(1); // trap here
   }
+
+  // load save to timers
   for(int i=0; i<numTimer; i++){
     timers[i]->time_now = timerSave.saveDict[i].value;
   }
@@ -111,12 +110,13 @@ void setup() {
 }
 
 void loop() {
-  // all multi press function
+  // all multi press function check
   multiplPressFn();
 
+  // timer ops
   bool all_timer_stopped = true;
   if(!is_multPress){
-    // timer update
+    // if no multi press, timer update
     unsigned long refresh_temp = millis();
     if(refresh_temp-refresh_prev >= refresh_intvl){
       for(int i=0; i<numButtons; i++){
@@ -132,11 +132,11 @@ void loop() {
           all_timer_stopped = false;
         }
       }
-      // display oled text
-      updateText();
+      updateText(); // display oled text
       refresh_prev = refresh_temp;
     }
   }else{
+    // if multi press stop all timers
     unsigned long refresh_temp = millis();
     if(refresh_temp-refresh_prev >= refresh_intvl){
       for(int i=0; i<numButtons; i++){
@@ -148,6 +148,7 @@ void loop() {
 
   // save to sd card
   unsigned long save_temp = millis();
+  // if timer start save every 10s
   if(save_temp-save_prev >= save_intvl && !all_timer_stopped){
     for(int i=0; i<numButtons; i++){
       timerSave.saveDict[i].value = timers[i]->time_now;
@@ -211,18 +212,6 @@ void displayMassage(String _text, bool _isFlash){
   display.display();
 }
 
-void countTimer(){
-  long top1 = 0;
-  String top1Name = "name";
-  for(int i=0; i<numTimer; i++){
-    if(timers[i]->time_now > top1){
-      top1 = timers[i]->time_now;
-      top1Name = timers[i]->name;
-    }
-  }
-  displayMassage(top1Name, true);
-}
-
 bool multiplPresseCheck(int _button1, int _button2){
   if(buttons[_button1]->readNow() && buttons[_button2]->readNow()){
     return true;
@@ -267,22 +256,25 @@ int* time2score(long _times[], int _numValues){
   double maxTime = 180000000.0;   // 50h
   double coefficient = 0; // for min-max normalization
 
+  // calculate totalTime
   for(int i=0; i<_numValues; i++){
     totalTime += _times[i];
   }
+  // calculate score based on percentage
   for(int i=0; i<_numValues; i++){
     tempScore[i] = ((double)_times[i]/totalTime)*_times[i];
   }
+  // find max score
   for(int i=0; i<_numValues; i++){
     if(_times[i] > maxScore){
       maxScore = _times[i];
     }
   }
-
+  // calculate coefficient based on totalTime
   coefficient = 1.0 + ((double)(totalTime - minTime) / (maxTime - minTime)) * 4.0;
   Serial.println(maxScore);
   Serial.println(coefficient);
-
+  // normalize score to 0-5
   for(int i=0; i<_numValues; i++){
     normalizedscore[i] = (tempScore[i]/maxScore)*coefficient;
     Serial.print(_times[i]);
@@ -293,16 +285,6 @@ int* time2score(long _times[], int _numValues){
   }
   return normalizedscore;
 }
-
-// long findMax(long _inputs[]){
-//   long maxValue = 0;
-//   for(int i=0; i<sizeof(_inputs); i++){
-//     if(_inputs[i] > maxValue){
-//       maxValue = _inputs[i];
-//     }
-//   }
-//   return maxValue;
-// }
 
 void multiplPressFn(){
   // fn1 score check
@@ -316,12 +298,12 @@ void multiplPressFn(){
     for(int index=0; index<numTimer; index++){
       display.print(timers[index]->name);
       display.print(": ");
-      display.println(timerSave.saveDict[index+3].value);
+      display.println(timerSave.saveDict[index+numTimer].value);
     }
     display.display();
   }
   // fn2 calculate score
-  else if(multiplPresseCheck(0, 2)){
+  else if(multiplPresseCheck(0, 3)){
     is_multPress = true;
     if(countDown(countDownTime)){
       long tempInput[numTimer];
@@ -330,12 +312,12 @@ void multiplPressFn(){
       }
       int* score = time2score(tempInput, numTimer);
       for(int i=0; i<dictSize; i++){
-        if(i<3){
+        if(i<numTimer){
           timers[i]->clear();
           timerSave.saveDict[i].value = 0;
           Serial.println(timerSave.saveDict[i].value);
-        }else if(i>2 && i<6){
-          timerSave.saveDict[i].value += score[i-3];
+        }else if(i>=numTimer && i<numTimer*2){
+          timerSave.saveDict[i].value += score[i-numTimer];
           Serial.println(timerSave.saveDict[i].value);
         }
       }
@@ -347,3 +329,13 @@ void multiplPressFn(){
     countDown_start = false;
   }
 }
+
+// long findMax(long _inputs[]){
+//   long maxValue = 0;
+//   for(int i=0; i<sizeof(_inputs); i++){
+//     if(_inputs[i] > maxValue){
+//       maxValue = _inputs[i];
+//     }
+//   }
+//   return maxValue;
+// }
