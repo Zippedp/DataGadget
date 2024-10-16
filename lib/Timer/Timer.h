@@ -32,6 +32,10 @@ public:
         return time_now/(1000UL*60*60);
     }
 
+    inline int crtMinutes(){
+        return time_now/(1000UL*60);
+    }
+
     // utility function
     void loadSave(long _time){
         time_now = _time;

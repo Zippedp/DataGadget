@@ -19,6 +19,25 @@
 // File myFile;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
+// Bar setting
+const int NUM_BARS = 4;
+const int MAX_BAR_LENGTH = 110;
+const int BAR_START_X = 10;
+const int BAR_START_Y = 9;
+const int BAR_HEIGHT = 5; 
+const int BAR_SPACING = 11; 
+int BAR_MOD = 5;
+int SELECTED_BAR = 0; 
+
+// animate setting
+unsigned long previousMillis = 0;
+unsigned long previousMillis1 = 0;
+const long interval = 200;
+int shiftOffset = 0;
+const int shiftStep = 1;
+const int maxShift = 4;
+bool is_blink = false;
+
 // refresh rate
 const int refresh_intvl = 20;
 unsigned long refresh_prev = 0;
@@ -59,6 +78,11 @@ SDSave timerSave(A7, "save.txt", dictSize, saveStrt);
 
 // update text on oled
 void updateText();
+// update animate
+void updateAni();
+void drawBar(int value, int index, bool isSelected);
+void animateSelectedBar(int selectedIndex, int shift);
+void barMapMod(int value);
 // exclusive timer
 void exCheck(int index);
 // display error massage on oled
@@ -115,6 +139,7 @@ void loop() {
 
   // timer ops
   bool all_timer_stopped = true;
+  SELECTED_BAR = -1;
   if(!is_multPress){
     // if no multi press, timer update
     unsigned long refresh_temp = millis();
@@ -130,9 +155,12 @@ void loop() {
         timers[i]->time();
         if(timers[i]->is_started){
           all_timer_stopped = false;
+          SELECTED_BAR = i;
         }
       }
       updateText(); // display oled text
+      updateAni();
+      display.display();
       refresh_prev = refresh_temp;
     }
   }else{
@@ -173,9 +201,82 @@ void updateText(){
     display.print("min ");
     display.print(timers[index]->toSeconds());
     display.println("s ");
+    display.println(" ");
+  }
+}
+
+void updateAni(){
+  for(int i = 0; i < NUM_BARS; i++) {
+    drawBar(timers[i]->crtMinutes(), i, i == SELECTED_BAR);
+  }
+  if(SELECTED_BAR != -1){
+    unsigned long currentMillis = millis();
+    if(currentMillis - previousMillis >= interval){
+      previousMillis = currentMillis;
+      shiftOffset += shiftStep;
+      if(shiftOffset >= maxShift) {
+        shiftOffset = 0;
+      }
+    }
+    animateSelectedBar(SELECTED_BAR, shiftOffset);
+  }
+}
+
+void drawBar(int value, int index, bool isSelected) {
+  barMapMod(value);
+  int barLength = map(value, 0, 60*BAR_MOD, 0, MAX_BAR_LENGTH);
+  if(barLength > MAX_BAR_LENGTH) barLength = MAX_BAR_LENGTH;
+
+  int y = BAR_START_Y + index * (BAR_HEIGHT + BAR_SPACING);
+  display.drawRect(BAR_START_X, y, MAX_BAR_LENGTH, BAR_HEIGHT, SSD1306_WHITE);
+  
+  if(!isSelected) {
+    for(int i = 0; i < barLength; i += maxShift) {
+      display.drawLine(BAR_START_X + i, y, BAR_START_X + i + 4, y + BAR_HEIGHT - 1, SSD1306_WHITE);
+    }
+  }
+}
+
+void animateSelectedBar(int selectedIndex, int shift) {
+  int value = timers[selectedIndex]->crtMinutes();
+  barMapMod(value);
+  int barLength = map(value, 0, 60*BAR_MOD, 0, MAX_BAR_LENGTH);
+  if(barLength > MAX_BAR_LENGTH) barLength = MAX_BAR_LENGTH;
+  // Serial.println("fuck");
+  
+  int y = BAR_START_Y + selectedIndex * (BAR_HEIGHT + BAR_SPACING);
+  display.fillRect(BAR_START_X + 1, y + 1, MAX_BAR_LENGTH - 2, BAR_HEIGHT - 2, SSD1306_BLACK);
+  display.drawRect(BAR_START_X, y, MAX_BAR_LENGTH, BAR_HEIGHT, SSD1306_WHITE);
+  unsigned long currentMillis = millis();
+  if(currentMillis - previousMillis1 > 1000){
+    previousMillis1 = currentMillis;
+    is_blink = !is_blink;
+  }
+  if(is_blink){
+    display.fillCircle(BAR_START_X-5, y+2, 2, SSD1306_WHITE);
+  }else{
+    display.drawCircle(BAR_START_X-5, y+2, 2, SSD1306_WHITE);
   }
 
-  display.display();
+  for(int i = 0; i < barLength; i += maxShift) {
+    int startX = BAR_START_X + i + shift;
+    if(startX >= BAR_START_X + barLength){
+      continue;
+    }
+    int endX = startX + 4;
+    if(endX > BAR_START_X + barLength) {
+      endX = BAR_START_X + barLength;
+    }
+    display.drawLine(startX, y, endX, y + BAR_HEIGHT - 1, SSD1306_WHITE);
+  }
+}
+
+void barMapMod(int value){
+  while (value >= 60*BAR_MOD)
+  {
+    BAR_MOD = BAR_MOD * 1.5;
+  }
+  
 }
 
 void exCheck(int index){
