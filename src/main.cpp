@@ -98,6 +98,7 @@ int* time2score(long _time[], int _numValues);
 
 void setup() {
   Serial.begin(19200);
+  pinMode(D6,OUTPUT); //
 
   // wait for serial ready
   delay(1000); 
@@ -144,12 +145,14 @@ void loop() {
     // if no multi press, timer update
     unsigned long refresh_temp = millis();
     if(refresh_temp-refresh_prev >= refresh_intvl){
+      digitalWrite(D6,LOW);
       for(int i=0; i<numButtons; i++){
         if(buttons[i]->pressed()){
           timers[i]->changeState();
           exCheck(i);
           Serial.print("Button: ");
           Serial.println(i);
+          digitalWrite(D6,HIGH);
         }
 
         timers[i]->time();
