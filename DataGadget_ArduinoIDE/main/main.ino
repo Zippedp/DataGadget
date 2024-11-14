@@ -11,23 +11,23 @@
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 
 // pin define
-#define button_1 D7
-#define button_2 D1
-#define button_3 D2
-#define button_4 D3
+#define button_1 D1
+#define button_2 D2
+#define button_3 D3
+// #define button_4 D7
 
 // File myFile;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // Bar setting
-const int NUM_BARS = 4;
-const int MAX_BAR_LENGTH = 110;
-const int BAR_START_X = 10;
-const int BAR_START_Y = 9;
-const int BAR_HEIGHT = 5; 
+const int MAX_BAR_LENGTH = 128;
+const int BAR_START_X = 0;
+const int BAR_START_Y = 17;
+const int BAR_HEIGHT = 15; 
 const int BAR_SPACING = 11; 
-int BAR_MOD = 5;
+int BAR_MOD = 1;
 int SELECTED_BAR = 0; 
+int displayed_bar = 0; 
 
 // animate setting
 unsigned long previousMillis = 0;
@@ -36,6 +36,7 @@ const long interval = 200;
 int shiftOffset = 0;
 const int shiftStep = 1;
 const int maxShift = 4;
+const int line_angle = 8;
 bool is_blink = false;
 
 // refresh rate
@@ -47,13 +48,21 @@ const int save_intvl = 10000;
 unsigned long save_prev = 0;
 
 // button var setup
-const int numButtons = 4;
-const byte buttonPins[numButtons] = {button_1, button_2, button_3, button_4};
+const int numButtons = 3;
+const byte buttonPins[numButtons] = {button_1, button_2, button_3};
 Button* buttons[numButtons];
 
+bool hotkey_is_pressed = false;
+const int hotPress_intvl = 100;
+unsigned long hotPress_prev = 0;
+
+int test1 = 0;
+int test2 = 1;
+int test3 = 2;
+
 // timer var setup
-const int numTimer = 4;
-String timer_name[numTimer] = {"STY", "WOK", "EXP", "ENT"};
+const int numTimer = 3;
+String timer_name[numTimer] = {"X", "Y", "Z"};
 Timer* timers[numTimer];
 
 // multi press config
@@ -66,11 +75,11 @@ bool is_multPress = false;
 bool countDown_start = false;
 
 // save structure
-const int dictSize = 12;
+const int dictSize = 9;
 keyValuePair saveStrt[dictSize] = {
-  {"t_study", 0}, {"t_work", 0}, {"t_explore", 0}, {"t_entertain", 0},
-  {"accum_0", 0}, {"accum_1", 0}, {"accum_2", 0}, {"accum_3", 0},
-  {"parm_0", 0}, {"parm_1", 0}, {"parm_2", 0}, {"parm_3", 0}
+  {"t_x", 0}, {"t_y", 0}, {"t_z", 0},
+  {"accum_0", 0}, {"accum_1", 0}, {"accum_2", 0},
+  {"parm_0", 0}, {"parm_1", 0}, {"parm_2", 0}
 };
 // init sd save
 SDSave timerSave(D0, "/save.txt", dictSize, saveStrt);
@@ -90,7 +99,7 @@ void displayMassage(String _text, bool _isFlash);
 // check all multi Press Fn
 void multiplPressFn();
 // Key combination function
-bool multiplPresseCheck(int _button1, int _button2);
+int multiplPresseCheck(int _button1, int _button2);
 // multi Press Fn time2score countdown
 bool countDown(int _countMs);
 // normalize time to int 0-5
@@ -98,7 +107,7 @@ int* time2score(long _time[], int _numValues);
 
 void setup() {
   Serial.begin(19200);
-  pinMode(D6,OUTPUT);
+  pinMode(D6,OUTPUT); // for temp vibration drive
 
   // wait for serial ready
   delay(1000); 
@@ -136,7 +145,7 @@ void setup() {
 
 void loop() {
   // all multi press function check
-  multiplPressFn();
+  multiplPressFn(); // if number of buttons changed multiplPress check might overflow list due to previous define
 
   // timer ops
   bool all_timer_stopped = true;
@@ -159,6 +168,7 @@ void loop() {
         if(timers[i]->is_started){
           all_timer_stopped = false;
           SELECTED_BAR = i;
+          displayed_bar = i;
         }
       }
       updateText(); // display oled text
@@ -195,23 +205,19 @@ void updateText(){
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0,0);
 
-  for(int index=0; index<numTimer; index++){
-    display.print(timers[index]->name);
-    display.print(": ");
-    display.print(timers[index]->toHours());
-    display.print("h ");
-    display.print(timers[index]->toMinutes());
-    display.print("min ");
-    display.print(timers[index]->toSeconds());
-    display.println("s ");
-    display.println(" ");
-  }
+  display.print(timers[displayed_bar]->name);
+  display.print(": ");
+  display.print(timers[displayed_bar]->toHours());
+  display.print("h ");
+  display.print(timers[displayed_bar]->toMinutes());
+  display.print("min ");
+  display.print(timers[displayed_bar]->toSeconds());
+  display.println("s ");
+  display.println(" ");
 }
 
 void updateAni(){
-  for(int i = 0; i < NUM_BARS; i++) {
-    drawBar(timers[i]->crtMinutes(), i, i == SELECTED_BAR);
-  }
+  drawBar(timers[displayed_bar]->crtMinutes(), displayed_bar, displayed_bar == SELECTED_BAR);
   if(SELECTED_BAR != -1){
     unsigned long currentMillis = millis();
     if(currentMillis - previousMillis >= interval){
@@ -226,30 +232,43 @@ void updateAni(){
 }
 
 void drawBar(int value, int index, bool isSelected) {
+  // data preprocess
   barMapMod(value);
-  int barLength = map(value, 0, 60*BAR_MOD, 0, MAX_BAR_LENGTH);
-  if(barLength > MAX_BAR_LENGTH) barLength = MAX_BAR_LENGTH;
-
-  int y = BAR_START_Y + index * (BAR_HEIGHT + BAR_SPACING);
-  display.drawRect(BAR_START_X, y, MAX_BAR_LENGTH, BAR_HEIGHT, SSD1306_WHITE);
+  int barLength = map(value, 0, 15*BAR_MOD, 0, MAX_BAR_LENGTH);
+  if(barLength > MAX_BAR_LENGTH) {
+    barLength = MAX_BAR_LENGTH;
+  }
+  // int y = BAR_START_Y + index * (BAR_HEIGHT + BAR_SPACING);
+  int y = BAR_START_Y;
+  
   
   if(!isSelected) {
-    for(int i = 0; i < barLength; i += maxShift) {
-      display.drawLine(BAR_START_X + i, y, BAR_START_X + i + 4, y + BAR_HEIGHT - 1, SSD1306_WHITE);
+    // for(int i = 1; i <= line_angle; i += maxShift){
+    //   display.drawLine(BAR_START_X - i, y, BAR_START_X - i - line_angle, y + BAR_HEIGHT - 1, SSD1306_WHITE);
+    // }
+    for(int i = 0; i < barLength + line_angle; i += maxShift) {
+      display.drawLine(BAR_START_X + i - line_angle, y, BAR_START_X + i, y + BAR_HEIGHT - 1, SSD1306_WHITE);
     }
+     display.fillRect(barLength, y + 1, barLength + line_angle, BAR_HEIGHT - 2, SSD1306_BLACK);
+     display.drawLine(barLength, y, barLength, y + BAR_HEIGHT - 1, SSD1306_WHITE);
   }
+  display.drawRect(BAR_START_X, y, MAX_BAR_LENGTH, BAR_HEIGHT, SSD1306_WHITE);
 }
 
 void animateSelectedBar(int selectedIndex, int shift) {
   int value = timers[selectedIndex]->crtMinutes();
   barMapMod(value);
-  int barLength = map(value, 0, 60*BAR_MOD, 0, MAX_BAR_LENGTH);
+  int barLength = map(value, 0, 15*BAR_MOD, 0, MAX_BAR_LENGTH);
   if(barLength > MAX_BAR_LENGTH) barLength = MAX_BAR_LENGTH;
   // Serial.println("fuck");
   
-  int y = BAR_START_Y + selectedIndex * (BAR_HEIGHT + BAR_SPACING);
+  // clear prev frame
+  // int y = BAR_START_Y + selectedIndex * (BAR_HEIGHT + BAR_SPACING);
+  int y = BAR_START_Y;
   display.fillRect(BAR_START_X + 1, y + 1, MAX_BAR_LENGTH - 2, BAR_HEIGHT - 2, SSD1306_BLACK);
   display.drawRect(BAR_START_X, y, MAX_BAR_LENGTH, BAR_HEIGHT, SSD1306_WHITE);
+
+  // blinking icon
   unsigned long currentMillis = millis();
   if(currentMillis - previousMillis1 > 1000){
     previousMillis1 = currentMillis;
@@ -261,21 +280,23 @@ void animateSelectedBar(int selectedIndex, int shift) {
     display.drawCircle(BAR_START_X-5, y+2, 2, SSD1306_WHITE);
   }
 
-  for(int i = 0; i < barLength; i += maxShift) {
-    int startX = BAR_START_X + i + shift;
-    if(startX >= BAR_START_X + barLength){
+  // bar line shift
+  for(int i = 0; i < barLength + line_angle + 1; i += maxShift) {
+    int startX = BAR_START_X + i - line_angle + shift;
+    if(startX > BAR_START_X + barLength + 1){
       continue;
     }
-    int endX = startX + 4;
-    if(endX > BAR_START_X + barLength) {
-      endX = BAR_START_X + barLength;
+    int endX = BAR_START_X + i + shift;
+    if(endX > BAR_START_X + barLength + 1) {
+      endX = BAR_START_X + barLength + 1;
     }
     display.drawLine(startX, y, endX, y + BAR_HEIGHT - 1, SSD1306_WHITE);
+      // display.drawLine(BAR_START_X + i - line_angle + shift, y, BAR_START_X + i + shift, y + BAR_HEIGHT - 1, SSD1306_WHITE);
   }
 }
 
 void barMapMod(int value){
-  while (value >= 60*BAR_MOD)
+  while (value >= 15*BAR_MOD)
   {
     BAR_MOD = BAR_MOD * 1.5;
   }
@@ -316,11 +337,29 @@ void displayMassage(String _text, bool _isFlash){
   display.display();
 }
 
-bool multiplPresseCheck(int _button1, int _button2){
-  if(buttons[_button1]->readNow() && buttons[_button2]->readNow()){
-    return true;
+int multiplPresseCheck(int _button1, int _button2){
+  bool bh_is_pressed = buttons[1]->readNow();
+  bool b1_is_pressed = buttons[_button1]->readNow();
+  bool b2_is_pressed = buttons[_button2]->readNow();
+  if(bh_is_pressed && !b1_is_pressed && !b2_is_pressed){
+    buttons[1]->ram = true;
   }
-  return false;
+  
+  if(buttons[1]->ram){
+    if(!bh_is_pressed){
+      buttons[1]->ram = false;
+    }
+    if(b1_is_pressed){
+      Serial.println("fn1");
+      return 1;
+    }else if(b2_is_pressed){
+      Serial.println("fn2");
+      return 2;
+    }else{
+      return 0;
+    }
+  }
+  return 0;
 }
 
 bool countDown(int _countMs){
@@ -391,8 +430,11 @@ int* time2score(long _times[], int _numValues){
 }
 
 void multiplPressFn(){
-  // fn1 score check
-  if(multiplPresseCheck(0, 1)){
+  int selectTemp = multiplPresseCheck(0, 2);
+  switch (selectTemp)
+  {
+    // fn1 score check
+  case 1:
     is_multPress = true;
 
     display.clearDisplay();
@@ -405,9 +447,10 @@ void multiplPressFn(){
       display.println(timerSave.saveDict[index+numTimer].value);
     }
     display.display();
-  }
+    break;
+    
   // fn2 calculate score
-  else if(multiplPresseCheck(0, 3)){
+  case 2:
     is_multPress = true;
     if(countDown(countDownTime)){
       long tempInput[numTimer];
@@ -428,9 +471,12 @@ void multiplPressFn(){
       timerSave.saveSD();
       delay(2000);
     }
-  }else{
+    break;
+  
+  default:
     is_multPress = false;
     countDown_start = false;
+    break;
   }
 }
 

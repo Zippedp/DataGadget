@@ -17,6 +17,7 @@ private:
   unsigned int deBounce_intvl = 5;
 
 public:
+  bool ram = false;
   Button(){}
   Button(byte _pin);
   Button(byte _pin, int _deBounce_intvl); // debounce interval config

@@ -48,7 +48,7 @@ void SDSave::readSave(){
 }
 
 void SDSave::saveSD(){
-  myFile = SD.open(saveName, FILE_WRITE);
+  myFile = SD.open(saveName, FILE_WRITE | O_TRUNC);
     if(myFile){
       for(int index=0; index<dictSize; index++){
         myFile.print(saveDict[index].key);
