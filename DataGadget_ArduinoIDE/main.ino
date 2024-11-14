@@ -6,12 +6,12 @@
 
 // screen define
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+#define SCREEN_HEIGHT 32 // OLED display height, in pixels
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 
 // pin define
-#define button_1 D0
+#define button_1 D7
 #define button_2 D1
 #define button_3 D2
 #define button_4 D3
@@ -73,7 +73,7 @@ keyValuePair saveStrt[dictSize] = {
   {"parm_0", 0}, {"parm_1", 0}, {"parm_2", 0}, {"parm_3", 0}
 };
 // init sd save
-SDSave timerSave(A7, "save.txt", dictSize, saveStrt);
+SDSave timerSave(D0, "/save.txt", dictSize, saveStrt);
 
 
 // update text on oled
@@ -98,7 +98,7 @@ int* time2score(long _time[], int _numValues);
 
 void setup() {
   Serial.begin(19200);
-  pinMode(D6,OUTPUT); //
+  pinMode(D6,OUTPUT);
 
   // wait for serial ready
   delay(1000); 
