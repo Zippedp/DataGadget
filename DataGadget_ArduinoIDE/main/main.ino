@@ -25,7 +25,8 @@ const int BAR_START_X = 0;
 const int BAR_START_Y = 17;
 const int BAR_HEIGHT = 15; 
 const int BAR_SPACING = 11; 
-int BAR_MOD = 1;
+int BAR_MOD = 15;
+int bar_base = 60;
 int SELECTED_BAR = 0; 
 int displayed_bar = 0; 
 
@@ -217,7 +218,7 @@ void updateText(){
 }
 
 void updateAni(){
-  drawBar(timers[displayed_bar]->crtMinutes(), displayed_bar, displayed_bar == SELECTED_BAR);
+  drawBar(timers[displayed_bar]->crtSeconds(), displayed_bar, displayed_bar == SELECTED_BAR);
   if(SELECTED_BAR != -1){
     unsigned long currentMillis = millis();
     if(currentMillis - previousMillis >= interval){
@@ -234,7 +235,7 @@ void updateAni(){
 void drawBar(int value, int index, bool isSelected) {
   // data preprocess
   barMapMod(value);
-  int barLength = map(value, 0, 15*BAR_MOD, 0, MAX_BAR_LENGTH);
+  int barLength = map(value, 0, bar_base*BAR_MOD, 0, MAX_BAR_LENGTH);
   if(barLength > MAX_BAR_LENGTH) {
     barLength = MAX_BAR_LENGTH;
   }
@@ -256,9 +257,9 @@ void drawBar(int value, int index, bool isSelected) {
 }
 
 void animateSelectedBar(int selectedIndex, int shift) {
-  int value = timers[selectedIndex]->crtMinutes();
+  int value = timers[selectedIndex]->crtSeconds();
   barMapMod(value);
-  int barLength = map(value, 0, 15*BAR_MOD, 0, MAX_BAR_LENGTH);
+  int barLength = map(value, 0, bar_base*BAR_MOD, 0, MAX_BAR_LENGTH);
   if(barLength > MAX_BAR_LENGTH) barLength = MAX_BAR_LENGTH;
   // Serial.println("fuck");
   
@@ -296,9 +297,10 @@ void animateSelectedBar(int selectedIndex, int shift) {
 }
 
 void barMapMod(int value){
-  while (value >= 15*BAR_MOD)
+  while (value >= bar_base*BAR_MOD)
   {
     BAR_MOD = BAR_MOD * 1.5;
+    Serial.println(BAR_MOD);
   }
   
 }
