@@ -33,44 +33,86 @@ void Button::dbRead(){
 }
 
 bool Button::pressed(){
-dbRead();
+    dbRead();
 
-valid_interaction = false;
-if(state == false){
-    last_state = state;
-}else{
-    if(last_state == false){
-        valid_interaction = true;
+    valid_interaction = false;
+    if(state == false){
         last_state = state;
+    }else{
+        if(last_state == false){
+            valid_interaction = true;
+            last_state = state;
+        }
     }
-}
 
-return valid_interaction;
+    return valid_interaction;
 }
 
 bool Button::released(){
-dbRead();
+    dbRead();
 
-valid_interaction = false;
-if(state == true){
-    last_state = state;
-}else{
-    if(last_state == true){
-        valid_interaction = true;
+    valid_interaction = false;
+    if(state == true){
         last_state = state;
+    }else{
+        if(last_state == true){
+            valid_interaction = true;
+            last_state = state;
+        }
     }
+
+    return valid_interaction;
 }
 
-return valid_interaction;
+bool Button::longPress(){
+    dbRead();
+
+    if(state){
+        if(!lp_is_start){
+            lp_start = millis();
+            lp_is_start = true;
+        }
+
+        if(lp_is_start && (millis() - lp_start >= lp_intvl)){
+            lp_is_start = false;
+            return true;
+        }
+    }else{
+        lp_is_start = false;
+    }
+
+    return false;
+}
+
+bool Button::doublePress(){
+    if(pressed()){
+        unsigned long double_temp = millis();
+
+        if(wait_double){
+            if (double_temp - double_check <= double_intvl) {
+                wait_double = false;
+                return true;
+            }
+        }
+
+        double_check = double_temp;
+        wait_double = true;
+    }
+
+    if(wait_double && (millis() - double_check > double_intvl)){
+        wait_double = false;
+    }
+
+    return false;
 }
 
 bool Button::toggle(){
 
-if(pressed()){
-    toggle_is_on = !toggle_is_on;
-}
+    if(pressed()){
+        toggle_is_on = !toggle_is_on;
+    }
 
-return toggle_is_on;
+    return toggle_is_on;
 }
 
 bool Button::readNow(){

@@ -18,7 +18,7 @@ private:
 
   bool lp_is_start = false;
   unsigned long lp_start = 0;
-  unsigned int lp_intvl = 1500;
+  unsigned int lp_intvl = 400;
 
   bool wait_double = false;
   unsigned long double_check = 0;

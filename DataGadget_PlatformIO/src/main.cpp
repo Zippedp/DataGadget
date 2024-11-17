@@ -31,14 +31,11 @@ int SELECTED_BAR = 0;
 bool is_activated = 0; 
 
 // animate setting
-unsigned long previousMillis = 0;
 unsigned long previousMillis1 = 0;
 const long interval = 200;
-int shiftOffset = 0;
 const int shiftStep = 1;
 const int maxShift = 4;
 const int line_angle = 8;
-bool is_blink = false;
 
 // refresh rate
 const int refresh_intvl = 20;
@@ -46,7 +43,6 @@ unsigned long refresh_prev = 0;
 
 // save setting
 const int save_intvl = 10000;
-unsigned long save_prev = 0;
 
 // button var setup
 const int numButtons = 3;
@@ -54,16 +50,18 @@ const byte buttonPins[numButtons] = {button_1, button_2, button_3};
 Button* buttons[numButtons];
 
 bool hotkey_is_pressed = false;
-const int hotPress_intvl = 100;
-unsigned long hotPress_prev = 0;
+const int action_intvl = 200;
 
 int test1 = 0;
 int test2 = 1;
 int test3 = 2;
 
-const int numModes = 2;
+const int numModes = 3;
+const int menuDelay = 500;
+int modeSlector = 1;
 bool showMenu = false;
-int modeSlector = 0;
+unsigned long menu_prev = 0;
+String modeName[numModes + 2] = {"X", "TIME", "CONT", "RAND","X"};
 
 // timer var setup
 const int numTimer = 3;
@@ -72,12 +70,8 @@ Timer* timers[numTimer];
 
 // multi press config
 // const unsigned int countDownTime = 3000;
-int countMs = 0;
 const int countDownTime = 3000;
-unsigned long countDown_prev = 0;
-unsigned long multPress_prev = 0;
 bool is_multPress = false;
-bool countDown_start = false;
 
 const int numCounter = 3;
 int counterSlect = 0;
@@ -121,8 +115,10 @@ bool countDown(int _countMs);
 // normalize time to int 0-5
 int* time2score(long _time[], int _numValues);
 
+bool menuSafe();
 void counterMode();
 void timerMode();
+String generateRandomString();
 
 void setup() {
   Serial.begin(19200);
@@ -172,23 +168,25 @@ void setup() {
 void loop() {
   // all multi press function check
   // multiplPressFn(); // if number of buttons changed multiplPress check might overflow list due to previous define
-
   if(buttons[1]->longPress()){
-    showMenu = true;
-    Serial.println("looooog");
+      showMenu = true;
+  }
+
+  if(!showMenu && menu_prev == 0){
+    menu_prev = millis();
   }
   
-  int mode_temp = multiplPresseCheck();
-  modeSlector += mode_temp;
-
-  if (modeSlector >= numModes) {
-    modeSlector = numModes - 1;
-  } else if (modeSlector < 0) {
-    modeSlector = 0;
-  }
-
   if(showMenu){
-    displayMassage("<--T | C-->", false);
+    menu_prev = 0;
+    int mode_temp = multiplPresseCheck();
+    modeSlector += mode_temp;
+
+    if(modeSlector >= numModes){
+      modeSlector = numModes - 1;
+    }else if(modeSlector < 0){
+      modeSlector = 0;
+    }
+    displayMassage("<--" + modeName[modeSlector + 2] + " | " + modeName[modeSlector] + "-->", false);
   }else{
     unsigned long refresh_temp = millis();
     if(refresh_temp-refresh_prev >= refresh_intvl){
@@ -198,11 +196,15 @@ void loop() {
 
       switch (modeSlector){
         case 0:
-          counterMode();
+          timerMode();
           break;
 
         case 1:
-          timerMode();
+          counterMode();
+          break;
+
+        case 2:
+          displayMassage(generateRandomString(),false);
           break;
       }
     }
@@ -231,6 +233,8 @@ void updateAni(){
 }
 
 void drawBar(int value, int index, bool isActivated) {
+  static unsigned long previousMillis = 0;
+  static int shiftOffset = 0;
   // input data preprocess
   barMapMod(value);
   int barLength = map(value, 0, bar_base*BAR_MOD, 0, MAX_BAR_LENGTH);
@@ -319,6 +323,10 @@ void displayMassage(String _text, bool _isFlash){
 }
 
 int multiplPresseCheck(){
+  static bool hotkey_is_pressed = false;
+  static bool action_triggered = false;
+  static unsigned long last_action_time = 0;
+
   bool bh_is_pressed = buttons[1]->readNow();
   bool b1_is_pressed = buttons[0]->readNow();
   bool b2_is_pressed = buttons[2]->readNow();
@@ -327,23 +335,34 @@ int multiplPresseCheck(){
   }
   
   if(hotkey_is_pressed){
+    unsigned long current_time = millis();
     if(!bh_is_pressed){
       hotkey_is_pressed = false;
-    }
-    if(b1_is_pressed){
-      // Serial.println("fn1");
+      action_triggered = false;
       showMenu = false;
-      return 1;
-    }else if(b2_is_pressed){
-      // Serial.println("fn2");
-      showMenu = false;
-      return -1;
+    }else if(!action_triggered || current_time - last_action_time >= action_intvl){
+      if(b1_is_pressed){
+        // Serial.println("fn1")
+        last_action_time = current_time;
+        action_triggered = true;
+        return 1;
+      }else if(b2_is_pressed){
+        // Serial.println("fn2");
+        last_action_time = current_time;
+        action_triggered = true;
+        return -1;
+      }
     }
+    
   }
   return 0;
 }
 
 bool countDown(int _countMs){
+  static int countMs = 0;
+  static unsigned long countDown_prev = 0;
+  static bool countDown_start = false;
+
   unsigned long countDown_temp = millis();
 
   if(!countDown_start){
@@ -412,27 +431,31 @@ int* time2score(long _times[], int _numValues){
 
 void counterMode(){
   bool is_flash = false;
-    for(int i=0; i<numButtons; i++){
-      if(buttons[i]->pressed()){
-        exCheck(i);
-        // is_flash = true;
-        counters[i] += 1;
-        counterSlect = i;
-        counterSave.saveDict[i].value = counters[i];
-        counterSave.saveSD();
-        Serial.print("Button: ");
-        Serial.println(i);
-        digitalWrite(D6,HIGH);
-        }
-      }
+  bool menuSafe_temp = menuSafe();
+  for(int i=0; i<numButtons; i++){
+    if(buttons[i]->released() && menuSafe_temp){
+      exCheck(i);
+      // is_flash = true;
+      counters[i] += 1;
+      counterSlect = i;
+      counterSave.saveDict[i].value = counters[i];
+      counterSave.saveSD();
+      Serial.print("Button: ");
+      Serial.println(i);
+      digitalWrite(D6,HIGH);
+    }
+  }
+    
   displayMassage(counterName[counterSlect] + ": " + counters[counterSlect], is_flash);
 }
 
 void timerMode(){
+  static unsigned long save_prev = 0;
   // if no multi press, timer update
   bool all_timer_stopped = true;
+  bool menuSafe_temp = menuSafe();
   for(int i=0; i<numButtons; i++){
-    if(buttons[i]->doublePress()){
+    if(buttons[i]->doublePress() && menuSafe_temp){
       timers[i]->changeState();
       exCheck(i);
       SELECTED_BAR = i;
@@ -467,53 +490,25 @@ void timerMode(){
   }
 }
 
-// void multiplPressFn(){
-//   int selectTemp = multiplPresseCheck();
-//   switch (selectTemp)
-//   {
-//     // fn1 score check
-//   case 1:
-//     is_multPress = true;
+bool menuSafe(){
+  if(menu_prev != 0 && (millis() - menu_prev < menuDelay)){
+    return false;
+  }
+  return true;
+}
 
-//     display.clearDisplay();
-//     display.setTextSize(1.5);
-//     display.setTextColor(SSD1306_WHITE);
-//     display.setCursor(0,0);
-//     for(int index=0; index<numTimer; index++){
-//       display.print(timers[index]->name);
-//       display.print(": ");
-//       display.println(timerSave.saveDict[index+numTimer].value);
-//     }
-//     display.display();
-//     break;
-    
-//   // fn2 calculate score
-//   case 2:
-//     is_multPress = true;
-//     if(countDown(countDownTime)){
-//       long tempInput[numTimer];
-//       for(int i=0; i<numTimer; i++){
-//         tempInput[i] = timers[i]->time_now;
-//       }
-//       int* score = time2score(tempInput, numTimer);
-//       for(int i=0; i<dictSize; i++){
-//         if(i<numTimer){
-//           timers[i]->clear();
-//           timerSave.saveDict[i].value = 0;
-//           Serial.println(timerSave.saveDict[i].value);
-//         }else if(i>=numTimer && i<numTimer*2){
-//           timerSave.saveDict[i].value += score[i-numTimer];
-//           Serial.println(timerSave.saveDict[i].value);
-//         }
-//       }
-//       timerSave.saveSD();
-//       delay(2000);
-//     }
-//     break;
-  
-//   default:
-//     is_multPress = false;
-//     countDown_start = false;
-//     break;
-//   }
-// }
+String generateRandomString() {
+  const char charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                         "abcdefghijklmnopqrstuvwxyz"
+                         "0123456789"
+                         "!@#$%^&*()-_=+[]{}|;:',.<>?/";
+  const int charsetSize = sizeof(charset) - 1;
+  String randomString = "";
+
+  for(int i = 0; i < 20; i++){
+    int randomIndex = random(0, charsetSize);
+    randomString += charset[randomIndex];
+  }
+
+  return randomString;
+}

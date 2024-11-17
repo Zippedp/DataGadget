@@ -28,17 +28,14 @@ const int BAR_SPACING = 11;
 int BAR_MOD = 15;
 int bar_base = 60;
 int SELECTED_BAR = 0; 
-int displayed_bar = 0; 
+bool is_activated = 0; 
 
 // animate setting
-unsigned long previousMillis = 0;
 unsigned long previousMillis1 = 0;
 const long interval = 200;
-int shiftOffset = 0;
 const int shiftStep = 1;
 const int maxShift = 4;
 const int line_angle = 8;
-bool is_blink = false;
 
 // refresh rate
 const int refresh_intvl = 20;
@@ -46,7 +43,6 @@ unsigned long refresh_prev = 0;
 
 // save setting
 const int save_intvl = 10000;
-unsigned long save_prev = 0;
 
 // button var setup
 const int numButtons = 3;
@@ -54,12 +50,18 @@ const byte buttonPins[numButtons] = {button_1, button_2, button_3};
 Button* buttons[numButtons];
 
 bool hotkey_is_pressed = false;
-const int hotPress_intvl = 100;
-unsigned long hotPress_prev = 0;
+const int action_intvl = 200;
 
 int test1 = 0;
 int test2 = 1;
 int test3 = 2;
+
+const int numModes = 3;
+const int menuDelay = 500;
+int modeSlector = 1;
+bool showMenu = false;
+unsigned long menu_prev = 0;
+String modeName[numModes + 2] = {"X", "TIME", "CONT", "RAND","X"};
 
 // timer var setup
 const int numTimer = 3;
@@ -68,12 +70,13 @@ Timer* timers[numTimer];
 
 // multi press config
 // const unsigned int countDownTime = 3000;
-int countMs = 0;
 const int countDownTime = 3000;
-unsigned long countDown_prev = 0;
-unsigned long multPress_prev = 0;
 bool is_multPress = false;
-bool countDown_start = false;
+
+const int numCounter = 3;
+int counterSlect = 0;
+int counters[numCounter] = {0, 0, 0};
+String counterName[numCounter] = {"X", "Y", "Z"};
 
 // save structure
 const int dictSize = 9;
@@ -82,8 +85,15 @@ keyValuePair saveStrt[dictSize] = {
   {"accum_0", 0}, {"accum_1", 0}, {"accum_2", 0},
   {"parm_0", 0}, {"parm_1", 0}, {"parm_2", 0}
 };
+
+// save structure
+const int dictSize_1 = 3;
+keyValuePair saveStrt_1[dictSize_1] = {
+  {"c_x", 0}, {"c_y", 0}, {"c_z", 0}
+};
 // init sd save
 SDSave timerSave(D0, "/save.txt", dictSize, saveStrt);
+SDSave counterSave(D0, "/save_c.txt", dictSize_1, saveStrt_1);
 
 
 // update text on oled
@@ -91,7 +101,6 @@ void updateText();
 // update animate
 void updateAni();
 void drawBar(int value, int index, bool isSelected);
-void animateSelectedBar(int selectedIndex, int shift);
 void barMapMod(int value);
 // exclusive timer
 void exCheck(int index);
@@ -100,11 +109,16 @@ void displayMassage(String _text, bool _isFlash);
 // check all multi Press Fn
 void multiplPressFn();
 // Key combination function
-int multiplPresseCheck(int _button1, int _button2);
+int multiplPresseCheck();
 // multi Press Fn time2score countdown
 bool countDown(int _countMs);
 // normalize time to int 0-5
 int* time2score(long _time[], int _numValues);
+
+bool menuSafe();
+void counterMode();
+void timerMode();
+String generateRandomString();
 
 void setup() {
   Serial.begin(19200);
@@ -132,94 +146,103 @@ void setup() {
   display.clearDisplay();
   
   // load save from sd card
-  if(timerSave.loadSDSave()){
-    displayMassage("* SD CARD ERROR *", false);
+  if(counterSave.loadSDSave()){
+    displayMassage("* SD CARD ERROR*", false);
     while(1); // trap here
   }
+  timerSave.readSave();
+  
 
   // load save to timers
   for(int i=0; i<numTimer; i++){
     timers[i]->time_now = timerSave.saveDict[i].value;
+  }
+
+  // load save to counters
+  for(int i=0; i<numCounter; i++){
+    counters[i] = counterSave.saveDict[i].value;
   }
   delay(100);
 }
 
 void loop() {
   // all multi press function check
-  multiplPressFn(); // if number of buttons changed multiplPress check might overflow list due to previous define
-
-  // timer ops
-  bool all_timer_stopped = true;
-  SELECTED_BAR = -1;
-  if(!is_multPress){
-    // if no multi press, timer update
-    unsigned long refresh_temp = millis();
-    if(refresh_temp-refresh_prev >= refresh_intvl){
-      digitalWrite(D6,LOW);
-      for(int i=0; i<numButtons; i++){
-        if(buttons[i]->pressed()){
-          timers[i]->changeState();
-          exCheck(i);
-          Serial.print("Button: ");
-          Serial.println(i);
-          digitalWrite(D6,HIGH);
-        }
-
-        timers[i]->time();
-        if(timers[i]->is_started){
-          all_timer_stopped = false;
-          SELECTED_BAR = i;
-          displayed_bar = i;
-        }
-      }
-      updateText(); // display oled text
-      updateAni();
-      display.display();
-      refresh_prev = refresh_temp;
-    }
-  }else{
-    // if multi press stop all timers
-    unsigned long refresh_temp = millis();
-    if(refresh_temp-refresh_prev >= refresh_intvl){
-      for(int i=0; i<numButtons; i++){
-        timers[i]->stop();
-      }
-    }
-    refresh_prev = refresh_temp;
+  // multiplPressFn(); // if number of buttons changed multiplPress check might overflow list due to previous define
+  if(buttons[1]->longPress()){
+      showMenu = true;
   }
 
-  // save to sd card
-  unsigned long save_temp = millis();
-  // if timer start save every 10s
-  if(save_temp-save_prev >= save_intvl && !all_timer_stopped){
-    for(int i=0; i<numButtons; i++){
-      timerSave.saveDict[i].value = timers[i]->time_now;
+  if(!showMenu && menu_prev == 0){
+    menu_prev = millis();
+  }
+  
+  if(showMenu){
+    menu_prev = 0;
+    int mode_temp = multiplPresseCheck();
+    modeSlector += mode_temp;
+
+    if(modeSlector >= numModes){
+      modeSlector = numModes - 1;
+    }else if(modeSlector < 0){
+      modeSlector = 0;
     }
-    timerSave.saveSD();
-    save_prev = save_temp;
+    displayMassage("<--" + modeName[modeSlector] + " | " + modeName[modeSlector + 2] + "-->", false);
+  }else{
+    unsigned long refresh_temp = millis();
+    if(refresh_temp-refresh_prev >= refresh_intvl){
+
+      refresh_prev = refresh_temp;
+      digitalWrite(D6,LOW);
+
+      switch (modeSlector){
+        case 0:
+          timerMode();
+          break;
+
+        case 1:
+          counterMode();
+          break;
+
+        case 2:
+          displayMassage(generateRandomString(),false);
+          break;
+      }
+    }
   }
 }
 
 void updateText(){
   display.clearDisplay();
-  display.setTextSize(1.5);
+  display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0,0);
 
-  display.print(timers[displayed_bar]->name);
+  display.print(timers[SELECTED_BAR]->name);
   display.print(": ");
-  display.print(timers[displayed_bar]->toHours());
+  display.print(timers[SELECTED_BAR]->toHours());
   display.print("h ");
-  display.print(timers[displayed_bar]->toMinutes());
+  display.print(timers[SELECTED_BAR]->toMinutes());
   display.print("min ");
-  display.print(timers[displayed_bar]->toSeconds());
+  display.print(timers[SELECTED_BAR]->toSeconds());
   display.println("s ");
   display.println(" ");
 }
 
 void updateAni(){
-  drawBar(timers[displayed_bar]->crtSeconds(), displayed_bar, displayed_bar == SELECTED_BAR);
-  if(SELECTED_BAR != -1){
+  drawBar(timers[SELECTED_BAR]->crtSeconds(), SELECTED_BAR, is_activated);
+}
+
+void drawBar(int value, int index, bool isActivated) {
+  static unsigned long previousMillis = 0;
+  static int shiftOffset = 0;
+  // input data preprocess
+  barMapMod(value);
+  int barLength = map(value, 0, bar_base*BAR_MOD, 0, MAX_BAR_LENGTH);
+  int y = BAR_START_Y;
+
+  // darw moving/static lines
+  if(isActivated) {
+    // calculate line shift
     unsigned long currentMillis = millis();
     if(currentMillis - previousMillis >= interval){
       previousMillis = currentMillis;
@@ -228,72 +251,32 @@ void updateAni(){
         shiftOffset = 0;
       }
     }
-    animateSelectedBar(SELECTED_BAR, shiftOffset);
-  }
-}
-
-void drawBar(int value, int index, bool isSelected) {
-  // data preprocess
-  barMapMod(value);
-  int barLength = map(value, 0, bar_base*BAR_MOD, 0, MAX_BAR_LENGTH);
-  if(barLength > MAX_BAR_LENGTH) {
-    barLength = MAX_BAR_LENGTH;
-  }
-  // int y = BAR_START_Y + index * (BAR_HEIGHT + BAR_SPACING);
-  int y = BAR_START_Y;
-  
-  
-  if(!isSelected) {
-    // for(int i = 1; i <= line_angle; i += maxShift){
-    //   display.drawLine(BAR_START_X - i, y, BAR_START_X - i - line_angle, y + BAR_HEIGHT - 1, SSD1306_WHITE);
-    // }
+    // clear prev frame
+    display.fillRect(BAR_START_X + 1, y + 1, MAX_BAR_LENGTH - 2, BAR_HEIGHT - 2, SSD1306_BLACK);
+    display.drawRect(BAR_START_X, y, MAX_BAR_LENGTH, BAR_HEIGHT, SSD1306_WHITE);
+    // draw shift lines
+    for(int i = 0; i < barLength + line_angle + 1; i += maxShift) {
+      int startX = BAR_START_X + i - line_angle + shiftOffset;
+      if(startX > BAR_START_X + barLength + 1){
+        continue;
+      }
+      int endX = BAR_START_X + i + shiftOffset;
+      if(endX > BAR_START_X + barLength + 1) {
+        endX = BAR_START_X + barLength + 1;
+      }
+      display.drawLine(startX, y, endX, y + BAR_HEIGHT - 1, SSD1306_WHITE);
+    }
+  }else{
+    // draw static lines
     for(int i = 0; i < barLength + line_angle; i += maxShift) {
       display.drawLine(BAR_START_X + i - line_angle, y, BAR_START_X + i, y + BAR_HEIGHT - 1, SSD1306_WHITE);
     }
      display.fillRect(barLength, y + 1, barLength + line_angle, BAR_HEIGHT - 2, SSD1306_BLACK);
      display.drawLine(barLength, y, barLength, y + BAR_HEIGHT - 1, SSD1306_WHITE);
   }
+
+  // draw outer rect
   display.drawRect(BAR_START_X, y, MAX_BAR_LENGTH, BAR_HEIGHT, SSD1306_WHITE);
-}
-
-void animateSelectedBar(int selectedIndex, int shift) {
-  int value = timers[selectedIndex]->crtSeconds();
-  barMapMod(value);
-  int barLength = map(value, 0, bar_base*BAR_MOD, 0, MAX_BAR_LENGTH);
-  if(barLength > MAX_BAR_LENGTH) barLength = MAX_BAR_LENGTH;
-  // Serial.println("fuck");
-  
-  // clear prev frame
-  // int y = BAR_START_Y + selectedIndex * (BAR_HEIGHT + BAR_SPACING);
-  int y = BAR_START_Y;
-  display.fillRect(BAR_START_X + 1, y + 1, MAX_BAR_LENGTH - 2, BAR_HEIGHT - 2, SSD1306_BLACK);
-  display.drawRect(BAR_START_X, y, MAX_BAR_LENGTH, BAR_HEIGHT, SSD1306_WHITE);
-
-  // blinking icon
-  unsigned long currentMillis = millis();
-  if(currentMillis - previousMillis1 > 1000){
-    previousMillis1 = currentMillis;
-    is_blink = !is_blink;
-  }
-  if(is_blink){
-    display.fillCircle(BAR_START_X-5, y+2, 2, SSD1306_WHITE);
-  }else{
-    display.drawCircle(BAR_START_X-5, y+2, 2, SSD1306_WHITE);
-  }
-
-  // bar line shift
-  for(int i = 0; i < barLength + line_angle + 1; i += maxShift) {
-    int startX = BAR_START_X + i - line_angle + shift;
-    if(startX > BAR_START_X + barLength + 1){
-      continue;
-    }
-    int endX = BAR_START_X + i + shift;
-    if(endX > BAR_START_X + barLength + 1) {
-      endX = BAR_START_X + barLength + 1;
-    }
-    display.drawLine(startX, y, endX, y + BAR_HEIGHT - 1, SSD1306_WHITE);
-      // display.drawLine(BAR_START_X + i - line_angle + shift, y, BAR_START_X + i + shift, y + BAR_HEIGHT - 1, SSD1306_WHITE);
-  }
 }
 
 void barMapMod(int value){
@@ -339,32 +322,47 @@ void displayMassage(String _text, bool _isFlash){
   display.display();
 }
 
-int multiplPresseCheck(int _button1, int _button2){
+int multiplPresseCheck(){
+  static bool hotkey_is_pressed = false;
+  static bool action_triggered = false;
+  static unsigned long last_action_time = 0;
+
   bool bh_is_pressed = buttons[1]->readNow();
-  bool b1_is_pressed = buttons[_button1]->readNow();
-  bool b2_is_pressed = buttons[_button2]->readNow();
+  bool b1_is_pressed = buttons[0]->readNow();
+  bool b2_is_pressed = buttons[2]->readNow();
   if(bh_is_pressed && !b1_is_pressed && !b2_is_pressed){
-    buttons[1]->ram = true;
+    hotkey_is_pressed = true;
   }
   
-  if(buttons[1]->ram){
+  if(hotkey_is_pressed){
+    unsigned long current_time = millis();
     if(!bh_is_pressed){
-      buttons[1]->ram = false;
+      hotkey_is_pressed = false;
+      action_triggered = false;
+      showMenu = false;
+    }else if(!action_triggered || current_time - last_action_time >= action_intvl){
+      if(b1_is_pressed){
+        // Serial.println("fn1")
+        last_action_time = current_time;
+        action_triggered = true;
+        return 1;
+      }else if(b2_is_pressed){
+        // Serial.println("fn2");
+        last_action_time = current_time;
+        action_triggered = true;
+        return -1;
+      }
     }
-    if(b1_is_pressed){
-      Serial.println("fn1");
-      return 1;
-    }else if(b2_is_pressed){
-      Serial.println("fn2");
-      return 2;
-    }else{
-      return 0;
-    }
+    
   }
   return 0;
 }
 
 bool countDown(int _countMs){
+  static int countMs = 0;
+  static unsigned long countDown_prev = 0;
+  static bool countDown_start = false;
+
   unsigned long countDown_temp = millis();
 
   if(!countDown_start){
@@ -431,63 +429,86 @@ int* time2score(long _times[], int _numValues){
   return normalizedscore;
 }
 
-void multiplPressFn(){
-  int selectTemp = multiplPresseCheck(0, 2);
-  switch (selectTemp)
-  {
-    // fn1 score check
-  case 1:
-    is_multPress = true;
-
-    display.clearDisplay();
-    display.setTextSize(1.5);
-    display.setTextColor(SSD1306_WHITE);
-    display.setCursor(0,0);
-    for(int index=0; index<numTimer; index++){
-      display.print(timers[index]->name);
-      display.print(": ");
-      display.println(timerSave.saveDict[index+numTimer].value);
+void counterMode(){
+  bool is_flash = false;
+  bool menuSafe_temp = menuSafe();
+  for(int i=0; i<numButtons; i++){
+    if(buttons[i]->released() && menuSafe_temp){
+      exCheck(i);
+      // is_flash = true;
+      counters[i] += 1;
+      counterSlect = i;
+      counterSave.saveDict[i].value = counters[i];
+      counterSave.saveSD();
+      Serial.print("Button: ");
+      Serial.println(i);
+      digitalWrite(D6,HIGH);
     }
-    display.display();
-    break;
+  }
     
-  // fn2 calculate score
-  case 2:
-    is_multPress = true;
-    if(countDown(countDownTime)){
-      long tempInput[numTimer];
-      for(int i=0; i<numTimer; i++){
-        tempInput[i] = timers[i]->time_now;
-      }
-      int* score = time2score(tempInput, numTimer);
-      for(int i=0; i<dictSize; i++){
-        if(i<numTimer){
-          timers[i]->clear();
-          timerSave.saveDict[i].value = 0;
-          Serial.println(timerSave.saveDict[i].value);
-        }else if(i>=numTimer && i<numTimer*2){
-          timerSave.saveDict[i].value += score[i-numTimer];
-          Serial.println(timerSave.saveDict[i].value);
-        }
-      }
-      timerSave.saveSD();
-      delay(2000);
+  displayMassage(counterName[counterSlect] + ": " + counters[counterSlect], is_flash);
+}
+
+void timerMode(){
+  static unsigned long save_prev = 0;
+  // if no multi press, timer update
+  bool all_timer_stopped = true;
+  bool menuSafe_temp = menuSafe();
+  for(int i=0; i<numButtons; i++){
+    if(buttons[i]->doublePress() && menuSafe_temp){
+      timers[i]->changeState();
+      exCheck(i);
+      SELECTED_BAR = i;
+      is_activated = true;
+      Serial.print("Button: ");
+      Serial.println(i);
+      digitalWrite(D6,HIGH);
     }
-    break;
-  
-  default:
-    is_multPress = false;
-    countDown_start = false;
-    break;
+
+    timers[i]->time();
+    if(timers[i]->is_started){
+      all_timer_stopped = false;
+    }
+    updateText(); // display oled text
+    updateAni();
+    display.display();
+  }
+
+  if(all_timer_stopped){
+    is_activated = false;
+  }
+
+  // save to sd card
+  unsigned long save_temp = millis();
+  // if timer start save every 10s
+  if(save_temp-save_prev >= save_intvl && !all_timer_stopped){
+    for(int i=0; i<numButtons; i++){
+      timerSave.saveDict[i].value = timers[i]->time_now;
+    }
+    timerSave.saveSD();
+    save_prev = save_temp;
   }
 }
 
-// long findMax(long _inputs[]){
-//   long maxValue = 0;
-//   for(int i=0; i<sizeof(_inputs); i++){
-//     if(_inputs[i] > maxValue){
-//       maxValue = _inputs[i];
-//     }
-//   }
-//   return maxValue;
-// }
+bool menuSafe(){
+  if(menu_prev != 0 && (millis() - menu_prev < menuDelay)){
+    return false;
+  }
+  return true;
+}
+
+String generateRandomString() {
+  const char charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                         "abcdefghijklmnopqrstuvwxyz"
+                         "0123456789"
+                         "!@#$%^&*()-_=+[]{}|;:',.<>?/";
+  const int charsetSize = sizeof(charset) - 1;
+  String randomString = "";
+
+  for(int i = 0; i < 20; i++){
+    int randomIndex = random(0, charsetSize);
+    randomString += charset[randomIndex];
+  }
+
+  return randomString;
+}

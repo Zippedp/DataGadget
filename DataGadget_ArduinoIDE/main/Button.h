@@ -16,6 +16,14 @@ private:
   unsigned long last_check = 0;
   unsigned int deBounce_intvl = 5;
 
+  bool lp_is_start = false;
+  unsigned long lp_start = 0;
+  unsigned int lp_intvl = 400;
+
+  bool wait_double = false;
+  unsigned long double_check = 0;
+  unsigned int double_intvl = 800;
+
 public:
   bool ram = false;
   Button(){}
@@ -29,6 +37,8 @@ public:
 
   bool pressed(); //press detect trigger
   bool released(); //release detect trigger
+  bool longPress(); //long Press trigger
+  bool doublePress(); //dubble press trigger
   bool toggle(); // on & off toggle
   bool readNow(); //just return debounced read
 };
