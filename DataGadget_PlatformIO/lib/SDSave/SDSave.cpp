@@ -48,7 +48,8 @@ void SDSave::readSave(){
 }
 
 void SDSave::saveSD(){
-  myFile = SD.open(saveName, FILE_WRITE | O_TRUNC);
+  // myFile = SD.open(saveName, FILE_WRITE | O_TRUNC);  //for seeed_xiao
+  myFile = SD.open(saveName, FILE_WRITE);  //for seeed_esp32c3
     if(myFile){
       for(int index=0; index<dictSize; index++){
         myFile.print(saveDict[index].key);

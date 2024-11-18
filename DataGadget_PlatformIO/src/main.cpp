@@ -147,7 +147,7 @@ void setup() {
   
   // load save from sd card
   if(counterSave.loadSDSave()){
-    displayMassage("* SD CARD ERROR*", false);
+    displayMassage("* SD CARD ERROR *", false);
     while(1); // trap here
   }
   timerSave.readSave();
