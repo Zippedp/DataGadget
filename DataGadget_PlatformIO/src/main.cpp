@@ -1,8 +1,20 @@
 #include <Arduino.h>
+// #include <ArduinoBLE.h>
 #include <Adafruit_SSD1306.h>
 #include "Button.h"
 #include "Timer.h"
 #include "SDSave.h"
+
+// // BLE UUID
+// #define SERVICE_UUID "19b10000-e8f2-537e-4f6c-d104768a1214"
+// #define SENSOR_CHARACTERISTIC_UUID "19b10001-e8f2-537e-4f6c-d104768a1214"
+// #define LED_CHARACTERISTIC_UUID "19b10002-e8f2-537e-4f6c-d104768a1214"
+
+// // BLE Characteristic
+// BLEService bleService(SERVICE_UUID);
+// BLEFloatCharacteristic sensorCharacteristic(SENSOR_CHARACTERISTIC_UUID, BLERead | BLENotify);
+// BLEByteCharacteristic ledCharacteristic(LED_CHARACTERISTIC_UUID, BLEWrite);
+// const int ledPin = D7;
 
 // screen define
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
@@ -49,8 +61,9 @@ const int numButtons = 3;
 const byte buttonPins[numButtons] = {button_1, button_2, button_3};
 Button* buttons[numButtons];
 
-bool hotkey_is_pressed = false;
-const int action_intvl = 200;
+bool is_locked = false;
+bool showLock = false;
+const int action_intvl = 300;
 
 int test1 = 0;
 int test2 = 1;
@@ -124,8 +137,24 @@ void setup() {
   Serial.begin(19200);
   pinMode(D6,OUTPUT); // for temp vibration drive
 
+  // pinMode(ledPin, OUTPUT);
+  // digitalWrite(ledPin, LOW);
+  // if (!BLE.begin()) {
+  //   Serial.println("启动 BLE 失败！");
+  //   while (1);
+  // }
+
   // wait for serial ready
   delay(1000); 
+
+  // // BLE init
+  // BLE.setLocalName("ESP32");
+  // BLE.setAdvertisedService(bleService);
+  // bleService.addCharacteristic(sensorCharacteristic);
+  // bleService.addCharacteristic(ledCharacteristic);
+  // BLE.addService(bleService);
+  // BLE.advertise();
+
   Serial.println("Serial Ready");
 
   // create buttons
@@ -166,49 +195,90 @@ void setup() {
 }
 
 void loop() {
+  // BLEDevice central = BLE.central();
+
+  // if (central) {
+  //   Serial.print("已连接至设备: ");
+  //   Serial.println(central.address());
+
+  //   if (central.connected() && ledCharacteristic.written()) {
+  //     int ledState = ledCharacteristic.value();
+  //     digitalWrite(ledPin, ledState);
+  //     Serial.print("LED 状态: ");
+  //     Serial.println(ledState);
+  //   }
+  // }
+
   // all multi press function check
-  // multiplPressFn(); // if number of buttons changed multiplPress check might overflow list due to previous define
-  if(buttons[1]->longPress()){
-      showMenu = true;
+  
+
+  if(buttons[0]->longPress() && buttons[2]->longPress()){
+    showLock = true;
+  }else if(buttons[1]->longPress()){
+    showMenu = true;
   }
 
-  if(!showMenu && menu_prev == 0){
+  if(!showMenu && menu_prev == 0 || !showLock && menu_prev == 0){
     menu_prev = millis();
   }
-  
-  if(showMenu){
-    menu_prev = 0;
-    int mode_temp = multiplPresseCheck();
-    modeSlector += mode_temp;
 
-    if(modeSlector >= numModes){
-      modeSlector = numModes - 1;
-    }else if(modeSlector < 0){
-      modeSlector = 0;
-    }
-    displayMassage("<--" + modeName[modeSlector + 2] + " | " + modeName[modeSlector] + "-->", false);
-  }else{
-    unsigned long refresh_temp = millis();
-    if(refresh_temp-refresh_prev >= refresh_intvl){
-
-      refresh_prev = refresh_temp;
-      digitalWrite(D6,LOW);
-
-      switch (modeSlector){
-        case 0:
-          timerMode();
-          break;
-
-        case 1:
-          counterMode();
-          break;
-
-        case 2:
-          displayMassage(generateRandomString(),false);
-          break;
+  switch (is_locked)
+  {
+    case true:{
+      menu_prev = 0;
+      multiplPresseCheck();
+      if(showLock){
+        displayMassage("UNLOCK?", false);
+      }else{
+        display.clearDisplay();
+        display.display();
       }
+      break;
+    }
+      
+    case false:{
+      if(showLock){
+        menu_prev = 0;
+        multiplPresseCheck();
+        displayMassage("LOCK?", false);
+        display.display();
+      }else if(showMenu){
+        menu_prev = 0;
+        int mode_temp = multiplPresseCheck();
+        modeSlector += mode_temp;
+
+        if(modeSlector >= numModes){
+          modeSlector = numModes - 1;
+        }else if(modeSlector < 0){
+          modeSlector = 0;
+        }
+        displayMassage("<--" + modeName[modeSlector + 2] + " | " + modeName[modeSlector] + "-->", false);
+      }else{
+        unsigned long refresh_temp = millis();
+        if(refresh_temp-refresh_prev >= refresh_intvl){
+
+          refresh_prev = refresh_temp;
+          digitalWrite(D6,LOW);
+
+          switch (modeSlector){
+            case 0:
+              timerMode();
+              break;
+
+            case 1:
+              counterMode();
+              break;
+
+            case 2:
+              displayMassage(generateRandomString(),false);
+              break;
+          }
+        }
+      }
+      break;
     }
   }
+  
 }
 
 void updateText(){
@@ -324,36 +394,53 @@ void displayMassage(String _text, bool _isFlash){
 
 int multiplPresseCheck(){
   static bool hotkey_is_pressed = false;
+  static bool lockKey_is_pressed = false;
   static bool action_triggered = false;
+  static bool lock_triggered = false;
   static unsigned long last_action_time = 0;
 
   bool bh_is_pressed = buttons[1]->readNow();
   bool b1_is_pressed = buttons[0]->readNow();
   bool b2_is_pressed = buttons[2]->readNow();
+  
+  if(b1_is_pressed && b2_is_pressed && !bh_is_pressed){
+    lockKey_is_pressed = true;
+  }else if(!b1_is_pressed && !b2_is_pressed){
+    lockKey_is_pressed = false;
+    lock_triggered = false;
+    showLock = false;
+  }
+
   if(bh_is_pressed && !b1_is_pressed && !b2_is_pressed){
     hotkey_is_pressed = true;
+  }else if(!bh_is_pressed){
+    hotkey_is_pressed = false;
+    action_triggered = false;
+    showMenu = false;
   }
-  
-  if(hotkey_is_pressed){
-    unsigned long current_time = millis();
-    if(!bh_is_pressed){
-      hotkey_is_pressed = false;
-      action_triggered = false;
-      showMenu = false;
-    }else if(!action_triggered || current_time - last_action_time >= action_intvl){
+
+  unsigned long current_time = millis();
+  if(lockKey_is_pressed){
+    if(!action_triggered || current_time - last_action_time >= action_intvl){
+      if(bh_is_pressed){
+        is_locked = !is_locked;
+        last_action_time = current_time;
+        action_triggered = true;
+        return 0;
+      }
+    }
+  }else if(hotkey_is_pressed){
+    if(!action_triggered || current_time - last_action_time >= action_intvl){
       if(b1_is_pressed){
-        // Serial.println("fn1")
         last_action_time = current_time;
         action_triggered = true;
         return 1;
       }else if(b2_is_pressed){
-        // Serial.println("fn2");
         last_action_time = current_time;
         action_triggered = true;
         return -1;
       }
     }
-    
   }
   return 0;
 }
