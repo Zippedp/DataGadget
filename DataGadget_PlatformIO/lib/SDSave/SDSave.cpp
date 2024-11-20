@@ -32,7 +32,7 @@ void SDSave::readSave(){
     }
   }else{
     // create save.txt
-    Serial.println("File doesn't exist.");
+    Serial.println(saveName + " doesn't exist.");
     myFile = SD.open(saveName, FILE_WRITE);
     if(myFile){
       for(int index=0; index<dictSize; index++){
@@ -50,6 +50,33 @@ void SDSave::readSave(){
 void SDSave::saveSD(){
   // myFile = SD.open(saveName, FILE_WRITE | O_TRUNC);  //for seeed_xiao
   myFile = SD.open(saveName, FILE_WRITE);  //for seeed_esp32c3
+    if(myFile){
+      for(int index=0; index<dictSize; index++){
+        myFile.print(saveDict[index].key);
+        myFile.print(":");
+        myFile.println(saveDict[index].value);
+      }
+    }else{
+        Serial.println("SAVE ERROR");
+    }
+  myFile.close();
+}
+
+void SDSave::checkExist(){
+  // check if save.txt exists
+  if (!SD.exists(saveName)) {
+    Serial.println(saveName + " doesn't exist.");
+    myFile = SD.open(saveName, FILE_WRITE);
+    if(!myFile){
+      Serial.println("CREATE ERROR");
+    }
+  }
+  myFile.close();
+}
+
+void SDSave::logSD(){
+  // myFile = SD.open(saveName, FILE_WRITE | O_TRUNC);  //for seeed_xiao
+  myFile = SD.open(saveName, FILE_APPEND);  //for seeed_esp32c3
     if(myFile){
       for(int index=0; index<dictSize; index++){
         myFile.print(saveDict[index].key);

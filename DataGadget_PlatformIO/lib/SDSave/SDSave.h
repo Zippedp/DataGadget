@@ -31,6 +31,8 @@ public:
     bool loadSDSave(); // frist time load and read sd save
     void readSave(); // read save
     void saveSD(); // save all
+    void checkExist(); // for append save only, create if not exist
+    void logSD(); // append all
 };
 
 #endif

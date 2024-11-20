@@ -49,6 +49,9 @@ const int shiftStep = 1;
 const int maxShift = 4;
 const int line_angle = 8;
 
+int displaySlector = 1;
+bool countDown_start = false;
+
 // refresh rate
 const int refresh_intvl = 20;
 unsigned long refresh_prev = 0;
@@ -64,53 +67,63 @@ Button* buttons[numButtons];
 bool is_locked = false;
 bool showLock = false;
 const int action_intvl = 300;
+const int runTimeLog_intvl = 300000;
+// const int runTimeLog_intvl = 60000;
+unsigned long runTime = 0;
 
-int test1 = 0;
-int test2 = 1;
-int test3 = 2;
-
-const int numModes = 3;
+const int numModes = 6;
 const int menuDelay = 500;
-int modeSlector = 1;
+int modeSlector = 2;
 bool showMenu = false;
-unsigned long menu_prev = 0;
-String modeName[numModes + 2] = {"X", "TIME", "CONT", "RAND","X"};
+unsigned long op_prev = 0;
+String modeName[numModes + 2] = {"   |", "CLER", "SHOW", "TIME", "CONT", "RAND", "BULE", "|   "};
 
 // timer var setup
 const int numTimer = 3;
-String timer_name[numTimer] = {"X", "Y", "Z"};
+String timer_name[numTimer] = {"T-X", "T-Y", "T-Z"};
 Timer* timers[numTimer];
 
 // multi press config
-// const unsigned int countDownTime = 3000;
 const int countDownTime = 3000;
 bool is_multPress = false;
 
 const int numCounter = 3;
 int counterSlect = 0;
 int counters[numCounter] = {0, 0, 0};
-String counterName[numCounter] = {"X", "Y", "Z"};
+String counterName[numCounter] = {"C-X", "C-Y", "C-Z"};
 
 // save structure
-const int dictSize = 9;
-keyValuePair saveStrt[dictSize] = {
-  {"t_x", 0}, {"t_y", 0}, {"t_z", 0},
-  {"accum_0", 0}, {"accum_1", 0}, {"accum_2", 0},
-  {"parm_0", 0}, {"parm_1", 0}, {"parm_2", 0}
-};
-
-// save structure
+const int dictSize_0 = 4;
 const int dictSize_1 = 3;
+const int dictSize_2 = 3;
+const int dictSize_3 = 4;
+const int dictSize_4 = 4;
+keyValuePair saveStrt_0[dictSize_0] = {
+  {"mode", 0}, {"runtime", 0}, {"t_clears", 0}, {"c_clears", 0}
+};
 keyValuePair saveStrt_1[dictSize_1] = {
+  {"t_x", 0}, {"t_y", 0}, {"t_z", 0}
+};
+keyValuePair saveStrt_2[dictSize_2] = {
   {"c_x", 0}, {"c_y", 0}, {"c_z", 0}
 };
+keyValuePair saveStrt_3[dictSize_3] = {
+  {"t_x", 0}, {"t_", 0}, {"t_z", 0}, {"runtime", 0}
+};
+keyValuePair saveStrt_4[dictSize_4] = {
+  {"c_x", 0}, {"c_y", 0}, {"c_z", 0}, {"runtime", 0}
+};
 // init sd save
-SDSave timerSave(D0, "/save.txt", dictSize, saveStrt);
-SDSave counterSave(D0, "/save_c.txt", dictSize_1, saveStrt_1);
+SDSave configSave(D0, "/config.txt", dictSize_0, saveStrt_0);
+SDSave timerSave(D0, "/save_t.txt", dictSize_1, saveStrt_1);
+SDSave counterSave(D0, "/save_c.txt", dictSize_2, saveStrt_2);
+SDSave pastTimerData(D0, "/past_t.txt", dictSize_3, saveStrt_3);
+SDSave pastCounterData(D0, "/past_c.txt", dictSize_4, saveStrt_4);
+
 
 
 // update text on oled
-void updateText();
+void updateText(int _displaySlector = 0);
 // update animate
 void updateAni();
 void drawBar(int value, int index, bool isSelected);
@@ -118,19 +131,23 @@ void barMapMod(int value);
 // exclusive timer
 void exCheck(int index);
 // display error massage on oled
-void displayMassage(String _text, bool _isFlash);
-// check all multi Press Fn
-void multiplPressFn();
+void displayMassage(String _text, bool _isFlash = false, int _textSize = 1);
 // Key combination function
-int multiplPresseCheck();
+int fnPresseCheck();
+void lockPresseCheck();
 // multi Press Fn time2score countdown
-bool countDown(int _countMs);
+bool countDown(int _countMs, String _massage = "");
 // normalize time to int 0-5
 int* time2score(long _time[], int _numValues);
 
-bool menuSafe();
+bool opSafe();
 void counterMode();
+
+void logRunTime(bool _logNow = false);
 void timerMode();
+void showMode();
+void clearMode();
+void bleMod();
 String generateRandomString();
 
 void setup() {
@@ -175,12 +192,23 @@ void setup() {
   display.clearDisplay();
   
   // load save from sd card
-  if(counterSave.loadSDSave()){
-    displayMassage("* SD CARD ERROR *", false);
+  if(configSave.loadSDSave()){
+    displayMassage("* SD CARD ERROR *");
     while(1); // trap here
   }
   timerSave.readSave();
-  
+  counterSave.readSave();
+  pastTimerData.checkExist();
+  pastCounterData.checkExist();
+
+  // load config
+  for(int i=0; i<numTimer; i++){
+    if(i==0){
+      modeSlector = configSave.saveDict[i].value;
+    }else if(i==1){
+      runTime = configSave.saveDict[i].value;
+    }
+  }
 
   // load save to timers
   for(int i=0; i<numTimer; i++){
@@ -208,94 +236,146 @@ void loop() {
   //     Serial.println(ledState);
   //   }
   // }
-
-  // all multi press function check
   
+  // all multi press function check
+  unsigned long refresh_temp = millis();
+  if(refresh_temp-refresh_prev >= refresh_intvl){
+    refresh_prev = refresh_temp;
+    digitalWrite(D6,LOW);
 
-  if(buttons[0]->longPress() && buttons[2]->longPress()){
-    showLock = true;
-  }else if(buttons[1]->longPress()){
-    showMenu = true;
-  }
+    logRunTime();
 
-  if(!showMenu && menu_prev == 0 || !showLock && menu_prev == 0){
-    menu_prev = millis();
-  }
-
-  switch (is_locked)
-  {
-    case true:{
-      menu_prev = 0;
-      multiplPresseCheck();
-      if(showLock){
-        displayMassage("UNLOCK?", false);
-      }else{
-        display.clearDisplay();
-        display.display();
-      }
-      break;
+    if(buttons[1]->longPress()){
+      showMenu = true;
     }
-      
-    case false:{
-      if(showLock){
-        menu_prev = 0;
-        multiplPresseCheck();
-        displayMassage("LOCK?", false);
-        display.display();
-      }else if(showMenu){
-        menu_prev = 0;
-        int mode_temp = multiplPresseCheck();
-        modeSlector += mode_temp;
+    if(!showMenu){
+      if(buttons[0]->longPress() && buttons[2]->longPress()){
+        showLock = true;
+      }
+    }
 
-        if(modeSlector >= numModes){
-          modeSlector = numModes - 1;
-        }else if(modeSlector < 0){
-          modeSlector = 0;
+    if(!showMenu && op_prev == 0 || !showLock && op_prev == 0){
+      op_prev = millis();
+    }
+
+    switch (is_locked)
+    {
+      case true:{
+        op_prev = 0;
+        lockPresseCheck();
+        if(showLock){
+          displayMassage("UNLOCK?");
+        }else{
+          display.clearDisplay();
+          display.display();
         }
-        displayMassage("<--" + modeName[modeSlector + 2] + " | " + modeName[modeSlector] + "-->", false);
-      }else{
-        unsigned long refresh_temp = millis();
-        if(refresh_temp-refresh_prev >= refresh_intvl){
+        break;
+      }
+        
+      case false:{
+        if(showLock){
+          op_prev = 0;
+          lockPresseCheck();
+          if(is_locked){
+            break;
+          }
+          fnPresseCheck();
+          displayMassage("LOCK?");
+          display.display();
+        }else if(showMenu){
+          op_prev = 0;
+          lockPresseCheck();
+          if(is_locked){
+            break;
+          }
+          int mode_temp = fnPresseCheck();
+          int config_temp = modeSlector;
+          modeSlector += mode_temp;
 
-          refresh_prev = refresh_temp;
-          digitalWrite(D6,LOW);
-
-          switch (modeSlector){
+          if(modeSlector >= numModes){
+            modeSlector = numModes - 1;
+          }else if(modeSlector < 0){
+            modeSlector = 0;
+          }
+          if(modeSlector != config_temp){
+            configSave.saveDict[0].value = modeSlector;
+            configSave.saveSD();
+          }
+          displayMassage(modeName[modeSlector] + " <- " + modeName[modeSlector+1]+ " -> " +modeName[modeSlector+2]);
+        }else{
+          switch(modeSlector){
             case 0:
-              timerMode();
+              clearMode();
               break;
 
             case 1:
-              counterMode();
+              showMode();
               break;
 
             case 2:
-              displayMassage(generateRandomString(),false);
+              timerMode();
+              break;
+
+            case 3:
+              counterMode();
+              break;
+
+            case 4:
+              displayMassage(generateRandomString());
+              break;
+
+            case 5:
+              bleMod();
               break;
           }
         }
+        break;
       }
-      break;
     }
   }
-  
 }
 
-void updateText(){
+void updateText(int _displaySlector){
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0,0);
-
-  display.print(timers[SELECTED_BAR]->name);
-  display.print(": ");
-  display.print(timers[SELECTED_BAR]->toHours());
-  display.print("h ");
-  display.print(timers[SELECTED_BAR]->toMinutes());
-  display.print("min ");
-  display.print(timers[SELECTED_BAR]->toSeconds());
-  display.println("s ");
-  display.println(" ");
+  
+  switch (_displaySlector)
+  {
+  case 0:
+    display.print(timers[SELECTED_BAR]->name);
+    display.print(": ");
+    display.print(timers[SELECTED_BAR]->toHours());
+    display.print("h ");
+    display.print(timers[SELECTED_BAR]->toMinutes());
+    display.print("min ");
+    display.print(timers[SELECTED_BAR]->toSeconds());
+    display.println("s ");
+    break;
+  
+  case 1:
+    for(int index=0; index<numTimer; index++){
+        display.print(timers[index]->name);
+        display.print(": ");
+        display.print(timers[index]->toHours());
+        display.print("h ");
+        display.print(timers[index]->toMinutes());
+        display.print("min ");
+        display.print(timers[index]->toSeconds());
+        display.println("s ");
+    }
+    break;
+    
+  case 2:
+    for(int index=0; index<numCounter; index++){
+        display.print(counterName[index]);
+        display.print(": ");
+        display.println(counters[index]);
+    }
+    break;
+  }
+  
 }
 
 void updateAni(){
@@ -366,7 +446,7 @@ void exCheck(int index){
   }
 }
 
-void displayMassage(String _text, bool _isFlash){
+void displayMassage(String _text, bool _isFlash, int _textSize){
   int16_t x1, y1;
   uint16_t textWidth, textHeight;
   display.getTextBounds(_text, 0, 0, &x1, &y1, &textWidth, &textHeight);
@@ -375,15 +455,15 @@ void displayMassage(String _text, bool _isFlash){
   int16_t y = (SCREEN_HEIGHT - textHeight) / 2;
   display.clearDisplay();
   display.setCursor(x,y);
-  display.setTextSize(1.5);
+  display.setTextSize(_textSize);
 
   if(_isFlash){
     display.fillScreen(WHITE);
     display.setTextColor(BLACK);
-    display.print(_text);
-    display.display();
-    display.clearDisplay();
-    display.setTextColor(WHITE);
+    // display.print(_text);
+    // display.display();
+    // display.clearDisplay();
+    // display.setTextColor(WHITE);
   }else{
     display.setTextColor(WHITE);
   }
@@ -392,25 +472,15 @@ void displayMassage(String _text, bool _isFlash){
   display.display();
 }
 
-int multiplPresseCheck(){
+int fnPresseCheck(){
   static bool hotkey_is_pressed = false;
-  static bool lockKey_is_pressed = false;
   static bool action_triggered = false;
-  static bool lock_triggered = false;
   static unsigned long last_action_time = 0;
 
   bool bh_is_pressed = buttons[1]->readNow();
   bool b1_is_pressed = buttons[0]->readNow();
   bool b2_is_pressed = buttons[2]->readNow();
   
-  if(b1_is_pressed && b2_is_pressed && !bh_is_pressed){
-    lockKey_is_pressed = true;
-  }else if(!b1_is_pressed && !b2_is_pressed){
-    lockKey_is_pressed = false;
-    lock_triggered = false;
-    showLock = false;
-  }
-
   if(bh_is_pressed && !b1_is_pressed && !b2_is_pressed){
     hotkey_is_pressed = true;
   }else if(!bh_is_pressed){
@@ -419,25 +489,18 @@ int multiplPresseCheck(){
     showMenu = false;
   }
 
-  unsigned long current_time = millis();
-  if(lockKey_is_pressed){
-    if(!action_triggered || current_time - last_action_time >= action_intvl){
-      if(bh_is_pressed){
-        is_locked = !is_locked;
-        last_action_time = current_time;
-        action_triggered = true;
-        return 0;
-      }
-    }
-  }else if(hotkey_is_pressed){
+  if(hotkey_is_pressed){
+    unsigned long current_time = millis();
     if(!action_triggered || current_time - last_action_time >= action_intvl){
       if(b1_is_pressed){
         last_action_time = current_time;
         action_triggered = true;
+        // digitalWrite(D6,HIGH);
         return 1;
       }else if(b2_is_pressed){
         last_action_time = current_time;
         action_triggered = true;
+        // digitalWrite(D6,HIGH);
         return -1;
       }
     }
@@ -445,11 +508,40 @@ int multiplPresseCheck(){
   return 0;
 }
 
-bool countDown(int _countMs){
+void lockPresseCheck(){
+  static bool lockKey_is_pressed = false;
+  static bool lock_triggered = false;
+  static unsigned long last_action_time = 0;
+
+  bool bh_is_pressed = buttons[1]->readNow();
+  bool b1_is_pressed = buttons[0]->readNow();
+  bool b2_is_pressed = buttons[2]->readNow();
+  
+  if(b1_is_pressed && b2_is_pressed && !bh_is_pressed){
+    showMenu = false;
+    lockKey_is_pressed = true;
+  }else if(!b1_is_pressed && !b2_is_pressed){
+    lockKey_is_pressed = false;
+    lock_triggered = false;
+    showLock = false;
+  }
+
+  if(lockKey_is_pressed){
+    unsigned long current_time = millis();
+    if(!lock_triggered || current_time - last_action_time >= action_intvl){
+      if(bh_is_pressed){
+        is_locked = !is_locked;
+        last_action_time = current_time;
+        lock_triggered = true;
+        digitalWrite(D6,HIGH);
+      }
+    }
+  }
+}
+
+bool countDown(int _countMs, String _massage){
   static int countMs = 0;
   static unsigned long countDown_prev = 0;
-  static bool countDown_start = false;
-
   unsigned long countDown_temp = millis();
 
   if(!countDown_start){
@@ -457,22 +549,18 @@ bool countDown(int _countMs){
     countDown_prev = countDown_temp;
     countMs = _countMs;
     Serial.println(countMs);
-    displayMassage(String(countMs/1000), true);
+    displayMassage(_massage + String(countMs/1000), true, 1);
   }
 
   if(countMs <= 0){
     countDown_start = false;
-    displayMassage("countDown end", false);
-    delay(2000);
     return true;
   }else if(countDown_temp-countDown_prev >= 1000){
     countMs -= 1000;
     Serial.println(countMs);
-    displayMassage(String(countMs/1000), true);
+    displayMassage(_massage + String(countMs/1000), true, 1);
     countDown_prev = countDown_temp;
   }
-
-  
   return false;
 }
 
@@ -516,13 +604,25 @@ int* time2score(long _times[], int _numValues){
   return normalizedscore;
 }
 
+void logRunTime(bool _logNow){
+  static unsigned long runTimeLog_prev = 0;
+  unsigned long runTimeLog_cur = millis();
+  unsigned long runTimeLog_gap = runTimeLog_cur - runTimeLog_prev;
+  if(runTimeLog_gap >= runTimeLog_intvl || _logNow){
+    runTimeLog_prev = runTimeLog_cur;
+    runTime += runTimeLog_gap;
+    configSave.saveDict[1].value = runTime;
+    configSave.saveSD();
+  }
+}
+
 void counterMode(){
   bool is_flash = false;
-  bool menuSafe_temp = menuSafe();
+  bool opSafe_temp = opSafe();
   for(int i=0; i<numButtons; i++){
-    if(buttons[i]->released() && menuSafe_temp){
+    if(buttons[i]->released() && opSafe_temp){
       exCheck(i);
-      // is_flash = true;
+      is_flash = true;
       counters[i] += 1;
       counterSlect = i;
       counterSave.saveDict[i].value = counters[i];
@@ -532,7 +632,6 @@ void counterMode(){
       digitalWrite(D6,HIGH);
     }
   }
-    
   displayMassage(counterName[counterSlect] + ": " + counters[counterSlect], is_flash);
 }
 
@@ -540,9 +639,9 @@ void timerMode(){
   static unsigned long save_prev = 0;
   // if no multi press, timer update
   bool all_timer_stopped = true;
-  bool menuSafe_temp = menuSafe();
+  bool opSafe_temp = opSafe();
   for(int i=0; i<numButtons; i++){
-    if(buttons[i]->doublePress() && menuSafe_temp){
+    if(buttons[i]->doublePress() && opSafe_temp){
       timers[i]->changeState();
       exCheck(i);
       SELECTED_BAR = i;
@@ -577,11 +676,128 @@ void timerMode(){
   }
 }
 
-bool menuSafe(){
-  if(menu_prev != 0 && (millis() - menu_prev < menuDelay)){
+void showMode(){
+  if(buttons[0]->pressed() && opSafe()){
+    displaySlector = 1;
+  }else if(buttons[2]->pressed() && opSafe()){
+    displaySlector = 2;
+  }
+  updateText(displaySlector);
+  display.display();
+}
+
+bool opSafe(){
+  if(op_prev != 0 && (millis() - op_prev < menuDelay)){
     return false;
   }
   return true;
+}
+
+void clearMode(){
+  static bool is_countdown = false;
+  static bool passOnec = false;
+  static int clearTarget = 0;
+  static String text = "ClearTIME | ClearCONT";
+
+  if(buttons[2]->released() && opSafe()){
+    if(passOnec){
+      passOnec = false;
+    }else{
+      clearTarget = 1;
+      text = "LP to clear TIME";
+    }
+  }else if(buttons[0]->released() && opSafe()){
+    if(passOnec){
+      passOnec = false;
+    }else{
+      clearTarget = 2;
+      text = "LP to clear CONT";
+    }
+    
+  }else if(clearTarget == 0 || !opSafe()){
+    text = "ClearTIME | ClearCONT";
+  }
+
+  if(!is_countdown){
+    displayMassage(text);
+  }
+
+  switch (clearTarget){
+    case 1:{
+      if(buttons[2]->longPress()){
+        is_countdown = true;
+      }
+
+      if(is_countdown && buttons[2]->readNow()){
+        if(countDown(countDownTime, "TIME clear in ")){
+          for(int i=0; i<numTimer; i++){
+            pastTimerData.saveDict[i].value = timers[i]->time_now;
+            timerSave.saveDict[i].value = 0;
+            timers[i]->clear();
+          }
+          pastTimerData.saveDict[3].value = configSave.saveDict[1].value;
+          configSave.saveDict[2].value += 1;
+
+          pastTimerData.logSD();
+          timerSave.saveSD();
+          logRunTime(true);
+
+          is_countdown = false;
+          clearTarget == 0;
+          passOnec = true;
+
+          displayMassage("TIME Cleared & Logged");
+          delay(2000);
+          displayMassage(" ");
+          delay(500);
+          op_prev = millis();
+        }
+      }else{
+        countDown_start = false;
+        is_countdown = false;
+      }
+      break;
+    }
+    case 2:{
+      if(buttons[0]->longPress()){
+        is_countdown = true;
+      }
+
+      if(is_countdown && buttons[0]->readNow()){
+        if(countDown(countDownTime, "CONT clear in ")){
+          for(int i=0; i<numCounter; i++){
+            pastCounterData.saveDict[i].value = counters[i];
+            counterSave.saveDict[i].value = 0;
+            counters[i] = 0;
+          }
+          pastCounterData.saveDict[3].value = configSave.saveDict[1].value;
+          configSave.saveDict[3].value += 1;
+
+          pastCounterData.logSD();
+          counterSave.saveSD();      
+          logRunTime(true);
+
+          is_countdown = false;
+          clearTarget == 0;
+          passOnec = true;
+
+          displayMassage("CONT Cleared & Logged");
+          delay(2000);
+          displayMassage(" ");
+          delay(500);
+          op_prev = millis();
+        }
+      }else{
+        countDown_start = false;
+        is_countdown = false;
+      }
+      break;
+    }
+  }
+}
+
+void bleMod(){
+  displayMassage("BLE not available now");
 }
 
 String generateRandomString() {
