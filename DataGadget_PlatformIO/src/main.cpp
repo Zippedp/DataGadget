@@ -1,20 +1,21 @@
 #include <Arduino.h>
-// #include <ArduinoBLE.h>
+#include <ArduinoBLE.h>
+#include <ArduinoJson.h>
 #include <Adafruit_SSD1306.h>
 #include "Button.h"
 #include "Timer.h"
 #include "SDSave.h"
 
-// // BLE UUID
-// #define SERVICE_UUID "19b10000-e8f2-537e-4f6c-d104768a1214"
-// #define SENSOR_CHARACTERISTIC_UUID "19b10001-e8f2-537e-4f6c-d104768a1214"
-// #define LED_CHARACTERISTIC_UUID "19b10002-e8f2-537e-4f6c-d104768a1214"
+// BLE UUID
+#define SERVICE_UUID "19b10000-e8f2-537e-4f6c-d104768a1214"
+#define SAVE_STRT_CHARACTERISTIC_UUID "19b10001-e8f2-537e-4f6c-d104768a1214"
+#define LED_CHARACTERISTIC_UUID "19b10002-e8f2-537e-4f6c-d104768a1214"
 
-// // BLE Characteristic
-// BLEService bleService(SERVICE_UUID);
-// BLEFloatCharacteristic sensorCharacteristic(SENSOR_CHARACTERISTIC_UUID, BLERead | BLENotify);
-// BLEByteCharacteristic ledCharacteristic(LED_CHARACTERISTIC_UUID, BLEWrite);
-// const int ledPin = D7;
+// BLE Characteristic
+BLEService bleService(SERVICE_UUID);
+BLEStringCharacteristic saveStrtCharacteristic(SAVE_STRT_CHARACTERISTIC_UUID, BLERead | BLENotify, 256);
+BLEByteCharacteristic ledCharacteristic(LED_CHARACTERISTIC_UUID, BLEWrite);
+const int ledPin = D7;
 
 // screen define
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
@@ -147,30 +148,23 @@ void logRunTime(bool _logNow = false);
 void timerMode();
 void showMode();
 void clearMode();
+void randMod();
 void bleMod();
 String generateRandomString();
+String save2Json();
+String getSaveStrtAsJson();
 
 void setup() {
   Serial.begin(19200);
   pinMode(D6,OUTPUT); // for temp vibration drive
 
-  // pinMode(ledPin, OUTPUT);
-  // digitalWrite(ledPin, LOW);
-  // if (!BLE.begin()) {
-  //   Serial.println("启动 BLE 失败！");
-  //   while (1);
-  // }
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW);
 
   // wait for serial ready
   delay(1000); 
 
-  // // BLE init
-  // BLE.setLocalName("ESP32");
-  // BLE.setAdvertisedService(bleService);
-  // bleService.addCharacteristic(sensorCharacteristic);
-  // bleService.addCharacteristic(ledCharacteristic);
-  // BLE.addService(bleService);
-  // BLE.advertise();
+  
 
   Serial.println("Serial Ready");
 
@@ -223,20 +217,6 @@ void setup() {
 }
 
 void loop() {
-  // BLEDevice central = BLE.central();
-
-  // if (central) {
-  //   Serial.print("已连接至设备: ");
-  //   Serial.println(central.address());
-
-  //   if (central.connected() && ledCharacteristic.written()) {
-  //     int ledState = ledCharacteristic.value();
-  //     digitalWrite(ledPin, ledState);
-  //     Serial.print("LED 状态: ");
-  //     Serial.println(ledState);
-  //   }
-  // }
-  
   // all multi press function check
   unsigned long refresh_temp = millis();
   if(refresh_temp-refresh_prev >= refresh_intvl){
@@ -321,7 +301,7 @@ void loop() {
               break;
 
             case 4:
-              displayMassage(generateRandomString());
+              randMod();
               break;
 
             case 5:
@@ -331,6 +311,18 @@ void loop() {
         }
         break;
       }
+
+          // if(BLE_is_on && modeSlector !=5){
+    //   unsigned long ble_cur = millis();
+    //   if(ble_cur-ble_onTime >= 3000){
+    //     ble_onTime = ble_cur;
+    //     if(BLE_is_on){
+    //       BLE.stopAdvertise();
+    //       BLE.end();
+    //       BLE_is_on = false;
+    //     }
+    //   }
+    // }
     }
   }
 }
@@ -676,6 +668,25 @@ void timerMode(){
   }
 }
 
+void randMod(){
+  static bool keep_gen = true;
+  bool opSafe_temp = opSafe();
+
+  if(!opSafe()){
+    keep_gen = true;
+  }
+
+  for(int i=0; i<numButtons; i++){
+    if(buttons[i]->pressed() && opSafe_temp){
+      keep_gen = !keep_gen;
+    }
+  }
+
+  if(keep_gen){
+    displayMassage(generateRandomString());
+  }
+}
+
 void showMode(){
   if(buttons[0]->pressed() && opSafe()){
     displaySlector = 1;
@@ -797,7 +808,76 @@ void clearMode(){
 }
 
 void bleMod(){
-  displayMassage("BLE not available now");
+  static bool need_init = true;
+  static bool BLE_is_on = false;
+  static unsigned long BLE_onTime = 0;
+
+  bool opSafe_temp = opSafe();
+
+  for(int i=0; i<numButtons; i++){
+    if(buttons[i]->released() && opSafe_temp){
+      if(i == 0){
+        BLE_is_on = true;
+      }else if(i == 2){
+        BLE_is_on = false;
+      }
+    }
+  }
+
+  if(BLE_is_on){
+    if(need_init){
+      if (!BLE.begin()) {
+        Serial.println("BLE INIT FAILL");
+        displayMassage("* BLE INIT FAILL *");
+        while (1);
+      }
+
+      need_init = false;
+      displayMassage("PREP BLE...", true);
+      delay(1000);
+
+      // BLE init
+      BLE.setLocalName("ESP32");
+      BLE.setAdvertisedService(bleService);
+      bleService.addCharacteristic(saveStrtCharacteristic);
+      bleService.addCharacteristic(ledCharacteristic);
+      BLE.addService(bleService);
+      BLE.advertise();
+      
+      delay(1000);
+    }
+
+    BLEDevice central = BLE.central();
+    BLE_onTime = millis();
+    displayMassage("BLE is ON", true);
+
+    if (central) {
+      Serial.print("connected to: ");
+      Serial.println(central.address());
+
+      if (central.connected() && ledCharacteristic.written()) {
+        int ledState = ledCharacteristic.value();
+        digitalWrite(ledPin, ledState);
+        Serial.print("LED: ");
+        Serial.println(ledState);
+      }
+      saveStrtCharacteristic.writeValue(save2Json());
+    }
+  }else{
+    displayMassage("BLE is OFF");
+    unsigned long ble_cur = millis();
+    if(ble_cur-BLE_onTime >= 3000){
+      BLE_onTime = ble_cur;
+      if(!need_init){
+        BLE.stopAdvertise();
+        BLE.end();
+      }
+      BLE_is_on = false;
+      need_init = true;
+    }
+  }
+
+  
 }
 
 String generateRandomString() {
@@ -814,4 +894,14 @@ String generateRandomString() {
   }
 
   return randomString;
+}
+
+String save2Json() {
+  JsonDocument jsonDoc;
+  for (int i = 0; i < dictSize_4; i++) {
+    jsonDoc[pastCounterData.saveDict[i].key] = pastCounterData.saveDict[i].value;
+  }
+  String jsonStr;
+  serializeJson(jsonDoc, jsonStr);
+  return jsonStr;
 }
