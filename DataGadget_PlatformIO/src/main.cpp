@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <ArduinoBLE.h>
-#include <ArduinoJson.h>
 #include <Adafruit_SSD1306.h>
 #include "Button.h"
 #include "Timer.h"
@@ -8,13 +7,17 @@
 
 // BLE UUID
 #define SERVICE_UUID "19b10000-e8f2-537e-4f6c-d104768a1214"
-#define SAVE_STRT_CHARACTERISTIC_UUID "19b10001-e8f2-537e-4f6c-d104768a1214"
+#define CUSTOM_NAME_CHARACTERISTIC_UUID "19b10001-e8f2-537e-4f6c-d104768a1214"
 #define LED_CHARACTERISTIC_UUID "19b10002-e8f2-537e-4f6c-d104768a1214"
+#define FILE_CHARACTERISTIC_UUID "19b10003-e8f2-537e-4f6c-d104768a1214"
+#define INPUT_CHARACTERISTIC_UUID "19b10004-e8f2-537e-4f6c-d104768a1214"
 
 // BLE Characteristic
 BLEService bleService(SERVICE_UUID);
-BLEStringCharacteristic saveStrtCharacteristic(SAVE_STRT_CHARACTERISTIC_UUID, BLERead | BLENotify, 256);
 BLEByteCharacteristic ledCharacteristic(LED_CHARACTERISTIC_UUID, BLEWrite);
+BLECharacteristic customNameCharacteristic(CUSTOM_NAME_CHARACTERISTIC_UUID, BLEWrite, 256);
+BLECharacteristic fileCharacteristic(FILE_CHARACTERISTIC_UUID, BLERead | BLENotify, 256);
+BLEIntCharacteristic inputCharacteristic(INPUT_CHARACTERISTIC_UUID, BLERead | BLENotify);
 const int ledPin = D7;
 
 // screen define
@@ -70,7 +73,7 @@ bool showLock = false;
 const int action_intvl = 300;
 const int runTimeLog_intvl = 300000;
 // const int runTimeLog_intvl = 60000;
-unsigned long runTime = 0;
+unsigned long runTime = 0; //in second incase of long runtime in milis exceed 47 days
 
 const int numModes = 6;
 const int menuDelay = 500;
@@ -81,7 +84,6 @@ String modeName[numModes + 2] = {"   |", "CLER", "SHOW", "TIME", "CONT", "RAND",
 
 // timer var setup
 const int numTimer = 3;
-String timer_name[numTimer] = {"T-X", "T-Y", "T-Z"};
 Timer* timers[numTimer];
 
 // multi press config
@@ -91,16 +93,20 @@ bool is_multPress = false;
 const int numCounter = 3;
 int counterSlect = 0;
 int counters[numCounter] = {0, 0, 0};
-String counterName[numCounter] = {"C-X", "C-Y", "C-Z"};
 
 // save structure
-const int dictSize_0 = 4;
+const int dictSize_config = 4;
+const int dictSize_customName = 6;
 const int dictSize_1 = 3;
 const int dictSize_2 = 3;
 const int dictSize_3 = 4;
 const int dictSize_4 = 4;
-keyValuePair saveStrt_0[dictSize_0] = {
+keyValuePair saveStrt_0[dictSize_config] = {
   {"mode", 0}, {"runtime", 0}, {"t_clears", 0}, {"c_clears", 0}
+};
+keyValuePair saveStrt_names[dictSize_customName] = {
+  {"T-X", 0}, {"T-Y", 0}, {"T-Z", 0},
+  {"C-X", 0}, {"C-Y", 0}, {"C-Z", 0}
 };
 keyValuePair saveStrt_1[dictSize_1] = {
   {"t_x", 0}, {"t_y", 0}, {"t_z", 0}
@@ -109,19 +115,18 @@ keyValuePair saveStrt_2[dictSize_2] = {
   {"c_x", 0}, {"c_y", 0}, {"c_z", 0}
 };
 keyValuePair saveStrt_3[dictSize_3] = {
-  {"t_x", 0}, {"t_", 0}, {"t_z", 0}, {"runtime", 0}
+  {"t_x", 0}, {"t_y", 0}, {"t_z", 0}, {"runtime", 0}
 };
 keyValuePair saveStrt_4[dictSize_4] = {
   {"c_x", 0}, {"c_y", 0}, {"c_z", 0}, {"runtime", 0}
 };
 // init sd save
-SDSave configSave(D0, "/config.txt", dictSize_0, saveStrt_0);
+SDSave configSave(D0, "/config.txt", dictSize_config, saveStrt_0);
+SDSave customName(D0, "/name.txt", dictSize_customName, saveStrt_names);
 SDSave timerSave(D0, "/save_t.txt", dictSize_1, saveStrt_1);
 SDSave counterSave(D0, "/save_c.txt", dictSize_2, saveStrt_2);
 SDSave pastTimerData(D0, "/past_t.txt", dictSize_3, saveStrt_3);
 SDSave pastCounterData(D0, "/past_c.txt", dictSize_4, saveStrt_4);
-
-
 
 // update text on oled
 void updateText(int _displaySlector = 0);
@@ -151,8 +156,8 @@ void clearMode();
 void randMod();
 void bleMod();
 String generateRandomString();
-String save2Json();
-String getSaveStrtAsJson();
+void sendEntireTxt(String fileName, int _dicSize = 4);
+void splitString(String input, String output[], int _dicSize = 3);
 
 void setup() {
   Serial.begin(19200);
@@ -161,12 +166,36 @@ void setup() {
   pinMode(ledPin, OUTPUT);
   digitalWrite(ledPin, LOW);
 
+  // init display
+  if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+    Serial.println(F("SSD1306 FAILED"));
+    while(1);
+  }
+  display.clearDisplay();
+
   // wait for serial ready
   delay(1000); 
-
-  
-
   Serial.println("Serial Ready");
+
+  // load save from sd card
+  if(configSave.loadSDSave()){
+    displayMassage("* SD CARD ERROR *");
+    while(1); // trap here
+  }
+  customName.readSave(true);
+  timerSave.readSave();
+  counterSave.readSave();
+  pastTimerData.checkExist();
+  pastCounterData.checkExist();
+
+  // load config
+  for(int i=0; i<dictSize_config; i++){
+    if(i==0){
+      modeSlector = configSave.saveDict[i].value;
+    }else if(i==1){
+      runTime = configSave.saveDict[i].value;
+    }
+  }
 
   // create buttons
   for(int i=0; i<numButtons; i++){
@@ -175,33 +204,7 @@ void setup() {
   }
   // create timers
   for(int i=0; i<numTimer; i++){
-    timers[i] = new Timer(timer_name[i]);
-  }
-
-  // init display
-  if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    Serial.println(F("SSD1306 FAILED"));
-    while(1);
-  }
-  display.clearDisplay();
-  
-  // load save from sd card
-  if(configSave.loadSDSave()){
-    displayMassage("* SD CARD ERROR *");
-    while(1); // trap here
-  }
-  timerSave.readSave();
-  counterSave.readSave();
-  pastTimerData.checkExist();
-  pastCounterData.checkExist();
-
-  // load config
-  for(int i=0; i<numTimer; i++){
-    if(i==0){
-      modeSlector = configSave.saveDict[i].value;
-    }else if(i==1){
-      runTime = configSave.saveDict[i].value;
-    }
+    timers[i] = new Timer(customName.saveDict[i].key);
   }
 
   // load save to timers
@@ -337,7 +340,7 @@ void updateText(int _displaySlector){
   {
   case 0:
     display.print(timers[SELECTED_BAR]->name);
-    display.print(": ");
+    display.println(": ");
     display.print(timers[SELECTED_BAR]->toHours());
     display.print("h ");
     display.print(timers[SELECTED_BAR]->toMinutes());
@@ -351,17 +354,17 @@ void updateText(int _displaySlector){
         display.print(timers[index]->name);
         display.print(": ");
         display.print(timers[index]->toHours());
-        display.print("h ");
+        display.print(":");
         display.print(timers[index]->toMinutes());
-        display.print("min ");
-        display.print(timers[index]->toSeconds());
-        display.println("s ");
+        display.print(":");
+        display.println(timers[index]->toSeconds());
+        // display.println("s ");
     }
     break;
     
   case 2:
     for(int index=0; index<numCounter; index++){
-        display.print(counterName[index]);
+        display.print(customName.saveDict[index+numTimer].key);
         display.print(": ");
         display.println(counters[index]);
     }
@@ -534,6 +537,7 @@ void lockPresseCheck(){
 bool countDown(int _countMs, String _massage){
   static int countMs = 0;
   static unsigned long countDown_prev = 0;
+
   unsigned long countDown_temp = millis();
 
   if(!countDown_start){
@@ -602,7 +606,7 @@ void logRunTime(bool _logNow){
   unsigned long runTimeLog_gap = runTimeLog_cur - runTimeLog_prev;
   if(runTimeLog_gap >= runTimeLog_intvl || _logNow){
     runTimeLog_prev = runTimeLog_cur;
-    runTime += runTimeLog_gap;
+    runTime += runTimeLog_gap/1000;
     configSave.saveDict[1].value = runTime;
     configSave.saveSD();
   }
@@ -624,7 +628,7 @@ void counterMode(){
       digitalWrite(D6,HIGH);
     }
   }
-  displayMassage(counterName[counterSlect] + ": " + counters[counterSlect], is_flash);
+  displayMassage(customName.saveDict[counterSlect+numTimer].key + ": " + counters[counterSlect], is_flash);
 }
 
 void timerMode(){
@@ -742,6 +746,7 @@ void clearMode(){
       if(is_countdown && buttons[2]->readNow()){
         if(countDown(countDownTime, "TIME clear in ")){
           for(int i=0; i<numTimer; i++){
+            pastTimerData.saveDict[i].key = customName.saveDict[i].key;
             pastTimerData.saveDict[i].value = timers[i]->time_now;
             timerSave.saveDict[i].value = 0;
             timers[i]->clear();
@@ -777,6 +782,7 @@ void clearMode(){
       if(is_countdown && buttons[0]->readNow()){
         if(countDown(countDownTime, "CONT clear in ")){
           for(int i=0; i<numCounter; i++){
+            pastCounterData.saveDict[i].key = customName.saveDict[i+numTimer].key;
             pastCounterData.saveDict[i].value = counters[i];
             counterSave.saveDict[i].value = 0;
             counters[i] = 0;
@@ -810,17 +816,23 @@ void clearMode(){
 void bleMod(){
   static bool need_init = true;
   static bool BLE_is_on = false;
+  static bool file_is_updated = false;
+  static int inputWeb = 0;
   static unsigned long BLE_onTime = 0;
+  static unsigned long BLE_lastUpdate = 0;
 
   bool opSafe_temp = opSafe();
 
   for(int i=0; i<numButtons; i++){
     if(buttons[i]->released() && opSafe_temp){
-      if(i == 0){
-        BLE_is_on = true;
-      }else if(i == 2){
-        BLE_is_on = false;
+      if(i == 1){
+        BLE_is_on = !BLE_is_on;
+      }else if(i == 0){
+        inputWeb = 1;
+      }else if (i == 2){
+        inputWeb = 2;
       }
+      
     }
   }
 
@@ -837,43 +849,84 @@ void bleMod(){
       delay(1000);
 
       // BLE init
-      BLE.setLocalName("ESP32");
+      BLE.setLocalName("DataGadget");
       BLE.setAdvertisedService(bleService);
-      bleService.addCharacteristic(saveStrtCharacteristic);
       bleService.addCharacteristic(ledCharacteristic);
+      bleService.addCharacteristic(fileCharacteristic);
+      bleService.addCharacteristic(customNameCharacteristic);
+      bleService.addCharacteristic(inputCharacteristic);
       BLE.addService(bleService);
       BLE.advertise();
-      
+
       delay(1000);
+      displayMassage("BLE is ON", true);
     }
 
-    BLEDevice central = BLE.central();
+    BLEDevice webAppCentral = BLE.central();
     BLE_onTime = millis();
-    displayMassage("BLE is ON", true);
 
-    if (central) {
-      Serial.print("connected to: ");
-      Serial.println(central.address());
+    if (webAppCentral) {
+      displayMassage("BLE is ON", true);
 
-      if (central.connected() && ledCharacteristic.written()) {
+      if(inputWeb){
+        inputCharacteristic.setValue(inputWeb);
+        inputWeb = 0;
+      }
+
+      if (webAppCentral.connected() && ledCharacteristic.written()) {
         int ledState = ledCharacteristic.value();
         digitalWrite(ledPin, ledState);
         Serial.print("LED: ");
         Serial.println(ledState);
       }
-      saveStrtCharacteristic.writeValue(save2Json());
+      if (webAppCentral.connected() && customNameCharacteristic.written()) {
+        String names = String((char*)customNameCharacteristic.value());
+        String nameDataPack[4];
+        splitString(names, nameDataPack);
+        Serial.println(nameDataPack[3].toInt());
+        if(nameDataPack[3].toInt() == 1){
+          for(int i=0; i<numTimer; i++){
+            customName.saveDict[i].key = nameDataPack[i];
+            timers[i]->name = nameDataPack[i];
+            Serial.println(nameDataPack[i]);
+          }
+        }else if(nameDataPack[3].toInt() == 2){
+          for(int i=0; i<numCounter; i++){
+            customName.saveDict[i + numTimer].key = nameDataPack[i];
+            Serial.println(nameDataPack[i]);
+          }
+        }
+        customName.saveSD();
+      }
+      
+      if(BLE_onTime-BLE_lastUpdate > 3000 && !file_is_updated){
+        BLE_lastUpdate = BLE_onTime;
+        file_is_updated = true;
+        sendEntireTxt("/past_c.txt");
+        // saveStrtCharacteristic.writeValue(save2Json());
+        // sensorCharacteristic.writeValue(save2Json());
+      }
+      
+    }else{
+      file_is_updated = false;
+      BLE_lastUpdate = millis();
+      if(!need_init){
+        displayMassage("BLE is ON", true);
+      }
     }
   }else{
     displayMassage("BLE is OFF");
     unsigned long ble_cur = millis();
-    if(ble_cur-BLE_onTime >= 3000){
+    BLE_lastUpdate = ble_cur;
+    if(ble_cur-BLE_onTime >= 5000){
       BLE_onTime = ble_cur;
       if(!need_init){
         BLE.stopAdvertise();
         BLE.end();
+        need_init = true;
+        file_is_updated = false;
       }
       BLE_is_on = false;
-      need_init = true;
     }
   }
 
@@ -896,12 +949,60 @@ String generateRandomString() {
   return randomString;
 }
 
-String save2Json() {
-  JsonDocument jsonDoc;
-  for (int i = 0; i < dictSize_4; i++) {
-    jsonDoc[pastCounterData.saveDict[i].key] = pastCounterData.saveDict[i].value;
+void sendEntireTxt(String fileName, int _dicSize){
+  File myFile = SD.open(fileName);
+  if (myFile) {
+    String packet = "";
+    int lineCount = 0;
+    String dot = "";
+
+    Serial.println("Sending...");
+
+    // read all line fome the file
+    while (myFile.available()) {
+      String line = myFile.readStringUntil('\n');
+      line.trim();
+      packet += line + "\n";
+      lineCount++;
+
+      // every dict log as one package
+      if (lineCount == _dicSize) {
+        fileCharacteristic.setValue(packet.c_str());
+        Serial.println(packet);
+
+        packet = "";
+        lineCount = 0;
+
+        dot = dot + ".";
+        if(dot == "...."){
+          dot = "";
+        }
+        displayMassage("Seding Data" + dot);
+
+        delay(500);
+      }
+    }
+    
+    if (lineCount > 0) {
+      Serial.println("PAST DATA FORMAT ERROR");
+    }
+
+    myFile.close();
+  } else {
+    Serial.println("SD CARD ERROR");
   }
-  String jsonStr;
-  serializeJson(jsonDoc, jsonStr);
-  return jsonStr;
+}
+
+void splitString(String input, String output[], int _dicSize) {
+  int start = 0;
+  int index = 0;
+
+  for(int i = 0; i < _dicSize; i++){
+    int end = input.indexOf(',', start);
+    if(end != -1){
+      output[index++] = input.substring(start, end);
+      start = end + 1;
+    }
+  }
+  output[index] = input.substring(start);
 }

@@ -11,6 +11,7 @@ const scene = new THREE.Scene();
 const canvas = document.querySelector('.webgl');
 
 // create renderer
+// const renderer = new THREE.WebGLRenderer({ canvas , alpha: true });
 const renderer = new THREE.WebGLRenderer({ canvas });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0xeeeeee, 1);
@@ -94,6 +95,23 @@ function animate() {
   controls.update();
   renderer.render(scene, camera);
 }
+
+// keydown events for 3js cam movments
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowLeft') {
+    targetXOffset += 4;
+  } else if (event.key === 'ArrowRight') {
+    targetXOffset -= 4;
+  }
+});
+
+// update renderer on window resize
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+});
+
 
 // start animation
 animate();

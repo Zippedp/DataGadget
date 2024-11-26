@@ -17,7 +17,7 @@ bool SDSave::loadSDSave(){
   return false;
 }
 
-void SDSave::readSave(){
+void SDSave::readSave(bool is_reading_keys){
   // check if save.txt exists
   if (SD.exists(saveName)) {
     myFile = SD.open(saveName);
@@ -25,7 +25,7 @@ void SDSave::readSave(){
     if (myFile) {
       while (myFile.available()) {
         String line = myFile.readStringUntil('\n');
-        readSaveLine(line);
+        readSaveLine(line, is_reading_keys);
       }
     } else {
         Serial.println("OPPEN ERROR");
@@ -89,7 +89,8 @@ void SDSave::logSD(){
   myFile.close();
 }
 
-void SDSave::readSaveLine(String line){
+void SDSave::readSaveLine(String line, bool is_reading_keys){
+  static int lineCounter = 0;
   int separatorIndex = line.indexOf(':');
   if(separatorIndex != -1) {
     // data separate
@@ -97,10 +98,18 @@ void SDSave::readSaveLine(String line){
     String valueStr = line.substring(separatorIndex + 1); // data
     long value = atol(valueStr.c_str()); // to long
     // load data to var
-    for(int i=0; i<dictSize; i++){
-      if(label == saveDict[i].key) {
-        saveDict[i].value = value;
-        break;
+    if(is_reading_keys){
+      if(lineCounter>=dictSize){
+        lineCounter = 0;
+      }
+      saveDict[lineCounter].key = label;
+      lineCounter += 1;
+    }else{
+      for(int i=0; i<dictSize; i++){
+        if(label == saveDict[i].key) {
+          saveDict[i].value = value;
+          break;
+        }
       }
     }
   }else{
