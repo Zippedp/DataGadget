@@ -865,21 +865,22 @@ void bleMod(){
     BLEDevice webAppCentral = BLE.central();
     BLE_onTime = millis();
 
-    if (webAppCentral) {
-      displayMassage("BLE is ON", true);
+    if (webAppCentral.connected() ) {
+      displayMassage("BLE CONNECTED", true);
 
       if(inputWeb){
         inputCharacteristic.setValue(inputWeb);
         inputWeb = 0;
       }
 
-      if (webAppCentral.connected() && ledCharacteristic.written()) {
+      if (ledCharacteristic.written()) {
         int ledState = ledCharacteristic.value();
         digitalWrite(ledPin, ledState);
         Serial.print("LED: ");
         Serial.println(ledState);
       }
-      if (webAppCentral.connected() && customNameCharacteristic.written()) {
+
+      if (customNameCharacteristic.written()) {
         String names = String((char*)customNameCharacteristic.value());
         String nameDataPack[4];
         splitString(names, nameDataPack);
@@ -902,9 +903,10 @@ void bleMod(){
       if(BLE_onTime-BLE_lastUpdate > 3000 && !file_is_updated){
         BLE_lastUpdate = BLE_onTime;
         file_is_updated = true;
+        sendEntireTxt("/past_t.txt");
+        displayMassage("Wait to send next");
+        delay(1500);
         sendEntireTxt("/past_c.txt");
-        // saveStrtCharacteristic.writeValue(save2Json());
-        // sensorCharacteristic.writeValue(save2Json());
       }
       
     }else{
@@ -918,7 +920,7 @@ void bleMod(){
     displayMassage("BLE is OFF");
     unsigned long ble_cur = millis();
     BLE_lastUpdate = ble_cur;
-    if(ble_cur-BLE_onTime >= 5000){
+    if(ble_cur-BLE_onTime >= 2000){
       BLE_onTime = ble_cur;
       if(!need_init){
         BLE.stopAdvertise();
@@ -929,8 +931,6 @@ void bleMod(){
       BLE_is_on = false;
     }
   }
-
-  
 }
 
 String generateRandomString() {

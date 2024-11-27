@@ -27,10 +27,14 @@ let fileCharacteristicObj;
 let nameTimerCharacteristic;
 let inputCharacteristic;
 let nameChangeTarget = 1;
+let lastFileTime = Date.now();
+let is_first_DataPack = true;
 
 // Total keys and values arrays
 const totalKeys = [];
 const totalValues = [];
+const totalKeys_1 = [];
+const totalValue_1 = [];
 
 // Event Listeners
 connectButton.addEventListener('click', connectToDevice);
@@ -145,6 +149,7 @@ function writeOnCharacteristic(value) {
 function disconnectDevice() {
     if (bleServer && bleServer.connected) {
         bleServer.disconnect();
+        is_first_DataPack = true;
         console.log("BLE device disconnected.");
     } else {
         alert("No BLE device connected to disconnect.");
@@ -155,8 +160,14 @@ function disconnectDevice() {
 // Handle Incoming File Data (New Functionality)
 function handleFileData(event) {
     const value = new TextDecoder().decode(event.target.value);
-    console.log("Received Data:", value);
+    const currentTime = Date.now();
+    console.log("Received Data:");
 
+    if(is_first_DataPack){
+        lastFileTime = currentTime;
+        is_first_DataPack = false;
+    }
+    
     // Parse the data
     const lines = value.trim().split('\n');
     if (lines.length !== 4) { // Assuming each data pack should have exactly 4 lines
@@ -185,11 +196,19 @@ function handleFileData(event) {
     }
 
     // Store parsed keys and values
-    totalKeys.push(keys);
-    totalValues.push(values);
+    if (currentTime - lastFileTime > 1000) {
+        totalKeys_1.push(keys);
+        totalValue_1.push(values);
+        console.log('Parsed Keys_1:', keys);
+        console.log('Parsed Values_1:', values);
+    } else {
+        totalKeys.push(keys);
+        totalValues.push(values);
+        console.log('Parsed Keys:', keys);
+        console.log('Parsed Values:', values);
+    }
 
-    console.log('Parsed Keys:', keys);
-    console.log('Parsed Values:', values);
+    lastFileTime = currentTime;
 }
 
 radioButtons.forEach(radio => {
