@@ -865,7 +865,7 @@ void bleMod(){
     BLEDevice webAppCentral = BLE.central();
     BLE_onTime = millis();
 
-    if (webAppCentral.connected() ) {
+    if(webAppCentral.connected()){
       displayMassage("BLE CONNECTED", true);
 
       if(inputWeb){
@@ -923,6 +923,7 @@ void bleMod(){
     if(ble_cur-BLE_onTime >= 2000){
       BLE_onTime = ble_cur;
       if(!need_init){
+        // BLE.disconnect();
         BLE.stopAdvertise();
         BLE.end();
         need_init = true;

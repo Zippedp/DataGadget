@@ -1,6 +1,9 @@
+import { targetOP } from '../JavaScript/3js.js';
+
 // DOM Elements
 const connectButton = document.getElementById('connectBleButton');
 const disconnectButton = document.getElementById('disconnectBleButton');
+const bleStateContainer = document.getElementById('bleState');
 const onButton = document.getElementById('onButton');
 const offButton = document.getElementById('offButton');
 const radioButtons = document.querySelectorAll('input[name="uploadSlector"]');
@@ -31,10 +34,10 @@ let lastFileTime = Date.now();
 let is_first_DataPack = true;
 
 // Total keys and values arrays
-const totalKeys = [];
-const totalValues = [];
-const totalKeys_1 = [];
-const totalValue_1 = [];
+export const totalKeys = [];
+export const totalValues = [];
+export const totalKeys_1 = [];
+export const totalValues_1 = [];
 
 // Event Listeners
 connectButton.addEventListener('click', connectToDevice);
@@ -53,6 +56,8 @@ async function connectToDevice() {
 
         bleServer = await device.gatt.connect();
         console.log("Connected to GATT Server");
+        bleStateContainer.innerHTML = 'Connected to ' + device.name;
+        bleStateContainer.style.color = "#24af37";
 
         bleServiceFound = await bleServer.getPrimaryService(bleService);
         console.log("Connected to service:", bleServiceFound.uuid);
@@ -63,13 +68,13 @@ async function connectToDevice() {
         fileCharacteristicObj.addEventListener('characteristicvaluechanged', handleFileData);
         console.log('FILE characteristic started.');
 
-        nameTimerCharacteristic = await bleServiceFound.getCharacteristic(TIMER_CUSTOM_NAME_CHARACTERISTIC_UUID);
-        console.log('TIMER_CUSTOM_NAME characteristic started.');
-
         inputCharacteristic = await bleServiceFound.getCharacteristic(INPUT_CHARACTERISTIC_UUID);
         await inputCharacteristic.startNotifications();
         inputCharacteristic.addEventListener('characteristicvaluechanged', diviceInput);
         console.log('INPUT characteristic started.');
+
+        nameTimerCharacteristic = await bleServiceFound.getCharacteristic(TIMER_CUSTOM_NAME_CHARACTERISTIC_UUID);
+        console.log('TIMER_CUSTOM_NAME characteristic started.');
 
     } catch (error) {
         console.error('Error connecting to BLE device:', error);
@@ -151,6 +156,7 @@ function disconnectDevice() {
         bleServer.disconnect();
         is_first_DataPack = true;
         console.log("BLE device disconnected.");
+        bleStateContainer.innerHTML = "Disconnected";
     } else {
         alert("No BLE device connected to disconnect.");
     }
@@ -159,6 +165,9 @@ function disconnectDevice() {
 
 // Handle Incoming File Data (New Functionality)
 function handleFileData(event) {
+    if (handleFileData.uploadSelector === undefined) {
+        handleFileData.uploadSelector = 0;
+    }
     const value = new TextDecoder().decode(event.target.value);
     const currentTime = Date.now();
     console.log("Received Data:");
@@ -197,15 +206,22 @@ function handleFileData(event) {
 
     // Store parsed keys and values
     if (currentTime - lastFileTime > 1000) {
-        totalKeys_1.push(keys);
-        totalValue_1.push(values);
-        console.log('Parsed Keys_1:', keys);
-        console.log('Parsed Values_1:', values);
-    } else {
+        handleFileData.uploadSelector += 1;
+    }
+
+    // Store parsed keys and values
+    if (handleFileData.uploadSelector == 0) {
         totalKeys.push(keys);
         totalValues.push(values);
         console.log('Parsed Keys:', keys);
         console.log('Parsed Values:', values);
+    } else if (handleFileData.uploadSelector == 1){
+        totalKeys_1.push(keys);
+        totalValues_1.push(values);
+        console.log('Parsed Keys_1:', keys);
+        console.log('Parsed Values_1:', values);
+    } else if (handleFileData.uploadSelector > 1){
+        handleFileData.uploadSelector = 0;
     }
 
     lastFileTime = currentTime;
@@ -239,5 +255,6 @@ function diviceInput(event){
     const value = event.target.value;
     const dataView = new DataView(value.buffer);
     const intValue = dataView.getInt32(0, true);
+    targetOP(intValue);
     console.log(intValue);
 }
