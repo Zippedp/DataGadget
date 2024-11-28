@@ -1,11 +1,14 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import {totalKeys_1, totalValues_1} from '../JavaScript/ble.js'
 
 // var for movement smooth
 let targetXOffset = 0;
 let moveSpeed = 0.05;
 let numberTester = 0;
+let cubeIndex = 0;
+let jar_is_loaded = false;
 
 // create scene
 const scene = new THREE.Scene();
@@ -23,6 +26,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 // create camera
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.z = 10;
+camera.position.y = 0.6;
 
 // init orbitControls
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -39,24 +43,22 @@ scene.add(ambientLight);
 
 // load GLTF model
 const loader = new GLTFLoader();
-const jarGroup = new THREE.Group();
-const cubeGroup = new THREE.Group();
+const jarGroup = [];
+const cubeGroup = [];
 const unitGroup = new THREE.Group();
 const BIGGroup = new THREE.Group();
+const Group = [];
 let jar;
 
-const textPlane = createTextPlane('Hello, World!', 'LOL', { x: 0, y: -0.5, z: 1 });
-createCubeFrame(20, 0, 0, 0);
-unitGroup.add(jarGroup);
-unitGroup.add(cubeGroup);
-unitGroup.add(textPlane);
-BIGGroup.add(unitGroup);
-scene.add(BIGGroup);
-// scene.add(jarGroup);
-// scene.add(cubeGroup);
-// scene.add(textPlane);
+// const textPlane = createTextPlane('Hello, World!', 'LOL', { x: 0, y: -0.5, z: 1 });
+// createCubeFrame(20, 0, 0, 0);
+// unitGroup.add(cubeGroup);
+// unitGroup.add(textPlane);
+// BIGGroup.add(unitGroup);
+// scene.add(BIGGroup);
+// // scene.add(cubeGroup);
+// // scene.add(textPlane);
 
-animate();
 
 // Animation function
 function animate() {
@@ -64,8 +66,13 @@ function animate() {
 
   // Smoothly move all meshes to the target position
   BIGGroup.position.x += (targetXOffset - BIGGroup.position.x) * moveSpeed;
-  cubeGroup.rotation.x += 0.002;
-  cubeGroup.rotation.z += 0.002;
+  // cubeGroup.rotation.x += 0.002;
+  // cubeGroup.rotation.z += 0.002;
+
+  cubeGroup.forEach(groupC => {
+    groupC.rotation.x += 0.002;
+    groupC.rotation.z += 0.002;
+  });
 
   controls.update();
   renderer.render(scene, camera);
@@ -87,23 +94,18 @@ loader.load(
         child.material = glassToonMaterial; // Replace the material of the child object
       }
     });
-    jarGroup.add(jar);
+    data2Unit(['testA', 'testB', 'testC','runtime'], [12, 25, 11, 20600]);
+    BIGGroup.add(unitOne);
+    scene.add(BIGGroup);
+    // data2jar(['testA', 'testB', 'testC','runtime'], [0, 10, 1, 20600], 0, 0, 0);
   },
-  undefined,
+  function ( xhr ) {
+		console.log( ( xhr.loaded / xhr.total * 100 ) + '% loaded' );
+	},
   function (error) {
     console.error(error);
   }
 );
-// add copies of the jar to the scene
-function addJarCopies(count, spacing) {
-  if (!jar) return;
-
-  for (let i = 1; i <= count; i++) {
-    const jarCopy = jar.clone();
-    jarCopy.position.set(i * spacing, 0, 0); // Set position of each copy, spacing along the X-axis
-    jarGroup.add(jarCopy);
-  }
-}
 
 function facetedBox(w, h, d, f, isWireframed) { // @author prisoner849
 
@@ -203,7 +205,7 @@ function facetedBox(w, h, d, f, isWireframed) { // @author prisoner849
   return geom;
 }
 
-function createCubeFrame(inputCount, centerX, centerY, centerZ) {
+function createCubeFrame(positionIndex, centerX, centerY, centerZ, targetGroup, inputcolor=0xff4294) {
   const cubeSize = 0.3;
   const gap = 0.02;
   const framePositions = [
@@ -220,35 +222,24 @@ function createCubeFrame(inputCount, centerX, centerY, centerZ) {
     [-1, 1, 1], [-1, 1, 0]
   ]; 
 
-  let currentCount = 0; 
-  for (let i = 0; i < framePositions.length; i++) {
-      if (currentCount >= inputCount) break;
+  const [dx, dy, dz] = framePositions[positionIndex];
+  const x = centerX + dx * (cubeSize + gap);
+  const y = centerY + dy * (cubeSize + gap);
+  const z = centerZ + dz * (cubeSize + gap);
 
-      const [dx, dy, dz] = framePositions[i];
-      const x = centerX + dx * (cubeSize + gap);
-      const y = centerY + dy * (cubeSize + gap);
-      const z = centerZ + dz * (cubeSize + gap);
+  const geometry = facetedBox(cubeSize, cubeSize, cubeSize , 0.08, false);
 
-      // 创建立方体
-      const geometry = facetedBox(cubeSize, cubeSize, cubeSize , 0.08, false);
-      // const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-      const material = new THREE.MeshPhysicalMaterial({
-        color: 0x94848e,
-        emissive: 0xff4294,
-        sheen: 0.6
-      });
-      // const material = new THREE.MeshToonMaterial({
-      //   color: 0xff4294,
-      // });
-      const cube = new THREE.Mesh(geometry, material);
+  const color2 = calculateMatchingColor(inputcolor, 0xff4294, 0x94848e)
+  const material = new THREE.MeshPhysicalMaterial({
+    color: color2,
+    emissive: inputcolor,
+    sheen: 0.6
+  });
 
-      // 设置立方体位置
-      cube.position.set(x, y, z);
-      // cube.castShadow = true;
-      cubeGroup.add(cube);
-
-      currentCount++;
-  }
+  const cubeChamfered = new THREE.Mesh(geometry, material);
+  cubeChamfered.position.set(x, y, z);
+  // cube.castShadow = true;
+  targetGroup.add(cubeChamfered);
 }
 
 // update renderer on window resize
@@ -280,14 +271,14 @@ export function targetOP(opInput){
   }
 }
 
-function createTextPlane(text_line1, text_line2, position, fontSize = 50, color = '#000000', backgroundColor = '#f7e7dd') {
+function createTextPlane(text_lines, position, fontSize = 50, color = '#000000', backgroundColor = '#f7e7dd') {
   // 创建一个Canvas来绘制文本
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
 
   // 设置Canvas的尺寸
   canvas.width = 512-128;
-  canvas.height = 128;
+  canvas.height = 256;
 
   // 设置背景颜色
   context.fillStyle = backgroundColor;
@@ -296,12 +287,14 @@ function createTextPlane(text_line1, text_line2, position, fontSize = 50, color 
   // 设置文本样式
   context.font = `${fontSize}px Arial`;
   context.fillStyle = color;
-  context.textAlign = 'center';
+  context.textAlign = 'left';
   context.textBaseline = 'middle';
 
-  // 绘制文本
-  context.fillText(text_line1, canvas.width / 2, canvas.height / 2 - fontSize/2);
-  context.fillText(text_line2, canvas.width / 2, canvas.height / 2 + fontSize/2);
+  // 绘制文本，起始位置在左侧
+  const padding = 20; // 添加一些内边距
+  text_lines.forEach((line, index) => {
+    context.fillText(line, padding, canvas.height / 4 - fontSize/2 + (fontSize+10)*index);
+  });
 
   // 创建纹理
   const texture = new THREE.CanvasTexture(canvas);
@@ -311,7 +304,7 @@ function createTextPlane(text_line1, text_line2, position, fontSize = 50, color 
   material.transparent = true;
 
   // 创建平面几何体
-  const geometry = new THREE.PlaneGeometry(0.75, 0.25);
+  const geometry = new THREE.PlaneGeometry(0.75, 0.5);
 
   // 创建Mesh
   const plane = new THREE.Mesh(geometry, material);
@@ -322,8 +315,99 @@ function createTextPlane(text_line1, text_line2, position, fontSize = 50, color 
   return plane;
 }
 
-function data2Obj(){
+function calculateMatchingColor(inputColor, colorA, colorB) {
+  const delta = calculateColorDelta(colorA, colorB); // 计算 RGB 差值
+  const inputRgb = hexToRgb(inputColor);
 
+  // 根据输入颜色和差值计算新颜色
+  const resultRgb = {
+    r: Math.max(0, Math.min(255, inputRgb.r + delta.r)),
+    g: Math.max(0, Math.min(255, inputRgb.g + delta.g)),
+    b: Math.max(0, Math.min(255, inputRgb.b + delta.b)),
+  };
+
+  return rgbToHex(resultRgb);
+}
+
+function generateColorPalette() {
+  // 随机生成一个基准色 (baseColor) 的 HSL 值
+  const baseHue = Math.floor(Math.random() * 360); // 色相 [0, 360)
+  const baseSaturation = 70; // 固定饱和度为 70%
+  const baseLightness = 50; // 固定亮度为 50%
+
+  // 定义符合配色原理的色相偏移量
+  const offset1 = 70; // 第一个偏移角度（类比色）
+  const offset2 = 140; // 第二个偏移角度（互补色）
+
+  // 生成三种颜色
+  const colors = [
+    hslToRgbHex(baseHue, baseSaturation, baseLightness),                  // 基准色
+    hslToRgbHex((baseHue + offset1) % 360, baseSaturation, baseLightness), // 类比色
+    hslToRgbHex((baseHue + offset2) % 360, baseSaturation, baseLightness), // 互补色
+  ];
+
+  return colors;
+}
+
+// function data2Obj(keys, values){
+//   numClears = keys.length;
+//   addJarCopies(numClears, 4);
+//   for(var i = 0; i < numClears; i++){
+
+//   }
+// }
+function getBowlingPosition(index) {
+  let row = 0;
+  let count = 0;
+  while (count <= index) {
+      row++;
+      count += row;
+  }
+  const col = index - (count - row);
+
+  const x = col*2 - (row - 1); 
+  const y = 0; 
+  const z = 2 -row * 2;
+
+  return { x, y, z };
+}
+
+function data2Unit(keys, values){
+  const numJar = values[0] + values[1] + values[2];
+  for(var i=0; i<numJar; i++){
+    cubeGroup.push(new THREE.Group);
+  }
+  const colorGens = generateColorPalette();
+  const array20 = splitArray(values);
+  array20.forEach((value, index) => {
+    const { x, y, z } = getBowlingPosition(index);
+    data2jar(index, keys, value, colorGens, x, y, z);
+  });
+}
+
+// const unitOne = new THREE.Group();
+function data2jar(jarIndex, keys, values, colorArr, centerX = 0, centerY = 0, centerZ = 0, numInputs = 3){
+  // const colorGens = generateColorPalette();
+  cubeGroup[jarIndex].position.set(centerX, centerY, centerZ);
+  console.log(cubeGroup[jarIndex].position);
+  const textArr = [];
+  keys.forEach((item, index) => {
+    if(index != 3){
+      for(var i=0; i<values[index]; i++){
+        createCubeFrame(cubeIndex, 0, 0, 0, cubeGroup[jarIndex], colorArr[index]);
+        cubeIndex += 1;
+      }
+    }
+    textArr.push(item + ': ' + values[index]);
+  });
+  cubeIndex = 0;
+  const textLable = createTextPlane(textArr, { x: centerX, y: centerY-0.4, z: centerZ+1 });
+  const jarrr = jar.clone();
+  jarrr.position.set(centerX, centerY, centerZ);
+  unitOne.add(jarrr);
+  unitOne.add(cubeGroup[jarIndex]);
+  unitOne.add(textLable);
+  unitOne.rotation.y = -0.55;
 }
 
 // const geometry = new THREE.BoxGeometry(1, 1, 1); // Cube geometry
@@ -332,3 +416,89 @@ function data2Obj(){
 // cube.castShadow = true;
 // cube.position.set(0,1,0);
 // scene.add(cube);
+
+// 将十六进制颜色转换为 RGB 对象
+function hexToRgb(hex) {
+  return {
+    r: (hex >> 16) & 0xff,
+    g: (hex >> 8) & 0xff,
+    b: hex & 0xff,
+  };
+}
+
+// 将 RGB 对象转换回十六进制颜色
+function rgbToHex(rgb) {
+  return (rgb.r << 16) | (rgb.g << 8) | rgb.b; // 返回数字类型
+}
+
+// 计算两个颜色的 RGB 差值
+function calculateColorDelta(colorA, colorB) {
+  const rgbA = hexToRgb(colorA);
+  const rgbB = hexToRgb(colorB);
+
+  return {
+    r: rgbB.r - rgbA.r,
+    g: rgbB.g - rgbA.g,
+    b: rgbB.b - rgbA.b,
+  };
+}
+
+function hslToRgbHex(h, s, l) {
+  s /= 100;
+  l /= 100;
+
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  const m = l - c / 2;
+
+  let r = 0, g = 0, b = 0;
+
+  if (0 <= h && h < 60) {
+    r = c; g = x; b = 0;
+  } else if (60 <= h && h < 120) {
+    r = x; g = c; b = 0;
+  } else if (120 <= h && h < 180) {
+    r = 0; g = c; b = x;
+  } else if (180 <= h && h < 240) {
+    r = 0; g = x; b = c;
+  } else if (240 <= h && h < 300) {
+    r = x; g = 0; b = c;
+  } else if (300 <= h && h < 360) {
+    r = c; g = 0; b = x;
+  }
+
+  r = Math.round((r + m) * 255);
+  g = Math.round((g + m) * 255);
+  b = Math.round((b + m) * 255);
+
+  return rgbToHex({ r, g, b });
+}
+
+const unitOne = new THREE.Group();
+// data2Unit(['testA', 'testB', 'testC'], [3, 10, 6], 0, 0, 0);
+// scene.add(unitOne);
+
+animate();
+
+function splitArray(arr) {
+  const result = [];
+  let [a, b, c, parm] = arr; // 解构前三个数和parm
+
+  while (a > 0 || b > 0 || c > 0) {
+      // 计算当前可用的总和，使其不大于20
+      const sum = Math.min(20, a + b + c);
+      const newA = Math.min(a, sum); // 当前A分配的值
+      const newB = Math.min(b, sum - newA); // 当前B分配的值
+      const newC = Math.min(c, sum - newA - newB); // 当前C分配的值
+
+      // 将当前分配的数组推入结果
+      result.push([newA, newB, newC, parm]);
+
+      // 更新剩余的数值
+      a -= newA;
+      b -= newB;
+      c -= newC;
+  }
+
+  return result;
+}
