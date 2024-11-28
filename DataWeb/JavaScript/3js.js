@@ -1,14 +1,19 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import {totalKeys_1, totalValues_1} from '../JavaScript/ble.js'
+import {totalKeys_1, totalValues_1_2num, data_is_loaded} from '../JavaScript/ble.js'
 
+// if(data_is_loaded && need_init){
+//   need_init = false;
+//   handleData(totalKeys_1, totalValues_1_2num);
+//   BIGGroup.add(unitOne);
+//   scene.add(BIGGroup);
+// }
 // var for movement smooth
 let targetXOffset = 0;
 let moveSpeed = 0.05;
 let numberTester = 0;
 let cubeIndex = 0;
-let jar_is_loaded = false;
 
 // create scene
 const scene = new THREE.Scene();
@@ -43,25 +48,43 @@ scene.add(ambientLight);
 
 // load GLTF model
 const loader = new GLTFLoader();
-const jarGroup = [];
 const cubeGroup = [];
-const unitGroup = new THREE.Group();
+const unitOne = new THREE.Group();
 const BIGGroup = new THREE.Group();
-const Group = [];
+let need_init = true;
+let jarIndex_test = 0;
 let jar;
 
-// const textPlane = createTextPlane('Hello, World!', 'LOL', { x: 0, y: -0.5, z: 1 });
-// createCubeFrame(20, 0, 0, 0);
-// unitGroup.add(cubeGroup);
-// unitGroup.add(textPlane);
-// BIGGroup.add(unitGroup);
-// scene.add(BIGGroup);
-// // scene.add(cubeGroup);
-// // scene.add(textPlane);
+// const allKeys = [
+//   ['testA', 'testB', 'testC','runtime'],
+//   ['A', 'B', 'C','runtime'],
+//   ['t23', '*(&s', 'lol','runtime'],
+//   ['testA', 'testB', 'testC','runtime'],
+//   ['A', 'B', 'C','runtime'],
+//   ['t23', '*(&s', 'lol','runtime']
+// ];
+// const allValues = [
+//   [10, 20, 11, 206],
+//   [12, 5, 11, 20600],
+//   [12, 25, 11, 20600],
+//   [10, 20, 11, 206],
+//   [12, 5, 11, 20600],
+//   [12, 25, 11, 20600]
+// ];
 
+animate();
 
 // Animation function
 function animate() {
+  // console.log(data_is_loaded);
+  if(data_is_loaded && need_init){
+    need_init = false;
+    scene.remove(jar);
+    handleData(totalKeys_1, totalValues_1_2num);
+    BIGGroup.add(unitOne);
+    scene.add(BIGGroup);
+    console.log(totalKeys_1, totalValues_1_2num);
+  }
   requestAnimationFrame(animate); // Loop the animation function
 
   // Smoothly move all meshes to the target position
@@ -94,10 +117,7 @@ loader.load(
         child.material = glassToonMaterial; // Replace the material of the child object
       }
     });
-    data2Unit(['testA', 'testB', 'testC','runtime'], [12, 25, 11, 20600]);
-    BIGGroup.add(unitOne);
-    scene.add(BIGGroup);
-    // data2jar(['testA', 'testB', 'testC','runtime'], [0, 10, 1, 20600], 0, 0, 0);
+    scene.add(jar);
   },
   function ( xhr ) {
 		console.log( ( xhr.loaded / xhr.total * 100 ) + '% loaded' );
@@ -257,9 +277,6 @@ window.addEventListener('keydown', (event) => {
     targetXOffset -= 4;
   } else if (event.key === 'ArrowUp') {
     numberTester += 1;
-  } else if (event.key === 'ArrowDown') {
-    // numberTester -= 1;
-    addJarCopies(5, 4);
   }
 });
 
@@ -349,13 +366,6 @@ function generateColorPalette() {
   return colors;
 }
 
-// function data2Obj(keys, values){
-//   numClears = keys.length;
-//   addJarCopies(numClears, 4);
-//   for(var i = 0; i < numClears; i++){
-
-//   }
-// }
 function getBowlingPosition(index) {
   let row = 0;
   let count = 0;
@@ -366,26 +376,40 @@ function getBowlingPosition(index) {
   const col = index - (count - row);
 
   const x = col*2 - (row - 1); 
-  const y = 0; 
+  const y = row*0.5; 
   const z = 2 -row * 2;
 
   return { x, y, z };
 }
 
-function data2Unit(keys, values){
-  const numJar = values[0] + values[1] + values[2];
-  for(var i=0; i<numJar; i++){
+function handleData(allKeys, allValues){
+  var numJar = 0;
+  jarIndex_test = 0;
+  allValues.forEach(values => {
+    for(var i=0; i<3; i++){
+      numJar += values[i];
+    }
+  });
+
+  for(var i=0; i<numJar/2+1; i++){
     cubeGroup.push(new THREE.Group);
   }
+  
+  allKeys.forEach((keys, index) => {
+    data2Unit(keys, allValues[index], index*4);
+  });
+}
+
+function data2Unit(keys, values, shiftX=0, shiftY=0, shiftZ=0, ){
   const colorGens = generateColorPalette();
   const array20 = splitArray(values);
   array20.forEach((value, index) => {
     const { x, y, z } = getBowlingPosition(index);
-    data2jar(index, keys, value, colorGens, x, y, z);
+    data2jar(jarIndex_test, keys, value, colorGens, shiftX+x, shiftY+y, shiftZ+z);
+    jarIndex_test += 1;
   });
 }
 
-// const unitOne = new THREE.Group();
 function data2jar(jarIndex, keys, values, colorArr, centerX = 0, centerY = 0, centerZ = 0, numInputs = 3){
   // const colorGens = generateColorPalette();
   cubeGroup[jarIndex].position.set(centerX, centerY, centerZ);
@@ -400,6 +424,7 @@ function data2jar(jarIndex, keys, values, colorArr, centerX = 0, centerY = 0, ce
     }
     textArr.push(item + ': ' + values[index]);
   });
+
   cubeIndex = 0;
   const textLable = createTextPlane(textArr, { x: centerX, y: centerY-0.4, z: centerZ+1 });
   const jarrr = jar.clone();
@@ -407,17 +432,9 @@ function data2jar(jarIndex, keys, values, colorArr, centerX = 0, centerY = 0, ce
   unitOne.add(jarrr);
   unitOne.add(cubeGroup[jarIndex]);
   unitOne.add(textLable);
-  unitOne.rotation.y = -0.55;
+  // unitOne.rotation.y = -0.55;
 }
 
-// const geometry = new THREE.BoxGeometry(1, 1, 1); // Cube geometry
-// const material = new THREE.MeshStandardMaterial({ color: 0x00ff83 }); // Basic material, green
-// const cube = new THREE.Mesh(geometry, material); // Create mesh object
-// cube.castShadow = true;
-// cube.position.set(0,1,0);
-// scene.add(cube);
-
-// 将十六进制颜色转换为 RGB 对象
 function hexToRgb(hex) {
   return {
     r: (hex >> 16) & 0xff,
@@ -426,12 +443,10 @@ function hexToRgb(hex) {
   };
 }
 
-// 将 RGB 对象转换回十六进制颜色
 function rgbToHex(rgb) {
   return (rgb.r << 16) | (rgb.g << 8) | rgb.b; // 返回数字类型
 }
 
-// 计算两个颜色的 RGB 差值
 function calculateColorDelta(colorA, colorB) {
   const rgbA = hexToRgb(colorA);
   const rgbB = hexToRgb(colorB);
@@ -473,12 +488,6 @@ function hslToRgbHex(h, s, l) {
 
   return rgbToHex({ r, g, b });
 }
-
-const unitOne = new THREE.Group();
-// data2Unit(['testA', 'testB', 'testC'], [3, 10, 6], 0, 0, 0);
-// scene.add(unitOne);
-
-animate();
 
 function splitArray(arr) {
   const result = [];

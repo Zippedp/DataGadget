@@ -1,4 +1,4 @@
-import { targetOP } from '../JavaScript/3js.js';
+// import { targetOP } from '../JavaScript/3js.js';
 
 // DOM Elements
 const connectButton = document.getElementById('connectBleButton');
@@ -32,12 +32,17 @@ let inputCharacteristic;
 let nameChangeTarget = 1;
 let lastFileTime = Date.now();
 let is_first_DataPack = true;
+let timer = null;
 
 // Total keys and values arrays
+export let data_is_loaded = false;
 export const totalKeys = [];
-export const totalValues = [];
+const totalValues = [];
+export var totalValues_2num = [];
+
 export const totalKeys_1 = [];
-export const totalValues_1 = [];
+const totalValues_1 = [];
+export var totalValues_1_2num = [];
 
 // Event Listeners
 connectButton.addEventListener('click', connectToDevice);
@@ -220,10 +225,10 @@ function handleFileData(event) {
         totalValues_1.push(values);
         console.log('Parsed Keys_1:', keys);
         console.log('Parsed Values_1:', values);
+        triggerDataLoaded();
     } else if (handleFileData.uploadSelector > 1){
         handleFileData.uploadSelector = 0;
     }
-
     lastFileTime = currentTime;
 }
 
@@ -255,6 +260,29 @@ function diviceInput(event){
     const value = event.target.value;
     const dataView = new DataView(value.buffer);
     const intValue = dataView.getInt32(0, true);
-    targetOP(intValue);
+    // targetOP(intValue);
     console.log(intValue);
 }
+
+window.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown') {
+        data_is_loaded = true;
+        console.log("pressed: ", data_is_loaded);
+    }
+  });
+
+async function triggerDataLoaded() {
+    // 如果已经有定时器在运行，清除它
+    if (timer) {
+      clearTimeout(timer);
+    }
+  
+    // 设置一个新的定时器
+    timer = setTimeout(() => {
+        totalValues_2num = totalValues.map(row => row.map(Number));
+        totalValues_1_2num = totalValues_1.map(row => row.map(Number));
+        data_is_loaded = true; // 设置全局变量
+        console.log("data_is_loaded has been set to true");
+        timer = null; // 清除定时器引用
+    }, 1000);
+  }
