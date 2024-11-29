@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rotating Cube with Three.js</title>
-  <!-- <script src="https://cdn.jsdelivr.net/npm/cannon@0.6.2/build/cannon.min.js"></script> -->
   <script type="importmap">
     {
       "imports": {
         "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+        "simplex-noise": "https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/+esm"
       }
     }
   </script>
@@ -19,16 +19,21 @@
 <body style="margin: 0; overflow: hidden;">
   <div class="content">
     <div>
-      <h2 >Web BLE APP</h2>
-      <button id="toggleButton">Expand</button>
+      <label class="toggle-container">
+        <label class="switch">
+          <input type="checkbox" id="ToggleSwitch">
+          <span class="slider round"></span>
+        </label>
+        <span class="toggle-text" id="hideToggle" style="align-items: center; padding-left: 6px; color: rgb(195, 195, 210);">Show Menu</span>
     </div>
   <div id="contentDiv" style="display: none;">
+    <h3>DataGadget WEB APP</h3>
     <hr>
     <button id="connectBleButton">Connect to BLE</button>
     <button id="disconnectBleButton">Disconnect BLE</button>
     <p>BLE state: <strong><span id="bleState" style="color:#d13a30;">Disconnected</span></strong></p>
     <hr>
-    <h3>Control GPIO 2</h3> 
+    <h3>Control Test Pin</h3> 
     <button id="onButton">ON</button>
     <button id="offButton">OFF</button>
     <hr>
@@ -41,9 +46,9 @@
             <input type="radio" name="uploadSlector" value="2"> Counters
         </label>
     </form>
-    <label>Input 1: <input type="text" id="input1"></label><br>
-    <label>Input 2: <input type="text" id="input2"></label><br>
-    <label>Input 3: <input type="text" id="input3"></label><br>
+    <label class="textInput">Input 1: <input type="text" id="input1"></label><br>
+    <label class="textInput">Input 2: <input type="text" id="input2"></label><br>
+    <label class="textInput">Input 3: <input type="text" id="input3"></label><br>
     <button id="submitButton">Change</button>
     <p id="errorMessage" style="color: red; display: none;"></p>
   </div>
@@ -51,17 +56,20 @@
   <canvas class="webgl"></canvas>
 </body>
 <script>
-  const toggleButton = document.getElementById('toggleButton');
+  const ToggleSwitch = document.getElementById('ToggleSwitch');
   const contentDiv = document.getElementById('contentDiv');
+  const hideToggle = document.getElementById('hideToggle');
 
-  toggleButton.addEventListener('click', () => {
-      if (contentDiv.style.display === 'none') {
-          contentDiv.style.display = 'block';
-          toggleButton.textContent = 'Collapse';
-      } else {
-          contentDiv.style.display = 'none';
-          toggleButton.textContent = 'Expand';
-      }
+  ToggleSwitch.addEventListener('change', () => {
+    if (ToggleSwitch.checked) {
+      contentDiv.style.display = 'block';
+      hideToggle.textContent = 'Hide Menu';
+      hideToggle.style.color = 'rgb(66, 66, 68)';
+    } else {
+      contentDiv.style.display = 'none';
+      hideToggle.textContent = 'Show Menu';
+      hideToggle.style.color = 'rgb(195, 195, 210)';
+    }
   });
 </script>
 <script src="../JavaScript/ble.js" type="module"></script>

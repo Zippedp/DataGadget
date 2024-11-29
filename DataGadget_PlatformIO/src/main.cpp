@@ -70,9 +70,11 @@ Button* buttons[numButtons];
 
 bool is_locked = false;
 bool showLock = false;
+bool ble_need_init = true;
 const int action_intvl = 300;
 const int runTimeLog_intvl = 300000;
 // const int runTimeLog_intvl = 60000;
+unsigned long BLE_onTime = 0;
 unsigned long runTime = 0; //in second incase of long runtime in milis exceed 47 days
 
 const int numModes = 6;
@@ -155,8 +157,10 @@ void showMode();
 void clearMode();
 void randMod();
 void bleMod();
+void bleModeCleanUp();
 String generateRandomString();
 void sendEntireTxt(String fileName, int _dicSize = 4);
+void sendCurrData(keyValuePair _save[], int _dicSize = 3, bool is_timer = true);
 void splitString(String input, String output[], int _dicSize = 3);
 
 void setup() {
@@ -312,20 +316,9 @@ void loop() {
               break;
           }
         }
+        bleModeCleanUp();
         break;
       }
-
-          // if(BLE_is_on && modeSlector !=5){
-    //   unsigned long ble_cur = millis();
-    //   if(ble_cur-ble_onTime >= 3000){
-    //     ble_onTime = ble_cur;
-    //     if(BLE_is_on){
-    //       BLE.stopAdvertise();
-    //       BLE.end();
-    //       BLE_is_on = false;
-    //     }
-    //   }
-    // }
     }
   }
 }
@@ -616,7 +609,7 @@ void counterMode(){
   bool is_flash = false;
   bool opSafe_temp = opSafe();
   for(int i=0; i<numButtons; i++){
-    if(buttons[i]->released() && opSafe_temp){
+    if(buttons[i]->doublePress() && opSafe_temp){
       exCheck(i);
       is_flash = true;
       counters[i] += 1;
@@ -626,6 +619,9 @@ void counterMode(){
       Serial.print("Button: ");
       Serial.println(i);
       digitalWrite(D6,HIGH);
+    }
+    if(buttons[i]->readNow() && opSafe_temp){
+      counterSlect = i;
     }
   }
   displayMassage(customName.saveDict[counterSlect+numTimer].key + ": " + counters[counterSlect], is_flash);
@@ -645,6 +641,10 @@ void timerMode(){
       Serial.print("Button: ");
       Serial.println(i);
       digitalWrite(D6,HIGH);
+    }
+
+    if(buttons[i]->readNow() && opSafe_temp){
+      SELECTED_BAR = i;
     }
 
     timers[i]->time();
@@ -814,37 +814,30 @@ void clearMode(){
 }
 
 void bleMod(){
-  static bool need_init = true;
   static bool BLE_is_on = false;
   static bool file_is_updated = false;
   static int inputWeb = 0;
-  static unsigned long BLE_onTime = 0;
   static unsigned long BLE_lastUpdate = 0;
 
   bool opSafe_temp = opSafe();
 
   for(int i=0; i<numButtons; i++){
     if(buttons[i]->released() && opSafe_temp){
-      if(i == 1){
-        BLE_is_on = !BLE_is_on;
-      }else if(i == 0){
-        inputWeb = 1;
-      }else if (i == 2){
-        inputWeb = 2;
-      }
-      
+      inputWeb = i+1;
     }
   }
 
-  if(BLE_is_on){
-    if(need_init){
+  if(ble_need_init){
+    if(countDown(3000, "BLE Start in ")){
       if (!BLE.begin()) {
         Serial.println("BLE INIT FAILL");
         displayMassage("* BLE INIT FAILL *");
         while (1);
       }
 
-      need_init = false;
+      ble_need_init = false;
+      file_is_updated = false;
+      BLE_is_on = true;
       displayMassage("PREP BLE...", true);
       delay(1000);
 
@@ -861,7 +854,7 @@ void bleMod(){
       delay(1000);
       displayMassage("BLE is ON", true);
     }
-
+  }else if(BLE_is_on){
     BLEDevice webAppCentral = BLE.central();
     BLE_onTime = millis();
 
@@ -904,33 +897,34 @@ void bleMod(){
         BLE_lastUpdate = BLE_onTime;
         file_is_updated = true;
         sendEntireTxt("/past_t.txt");
+        sendCurrData(timerSave.saveDict, dictSize_1, true);
         displayMassage("Wait to send next");
         delay(1500);
         sendEntireTxt("/past_c.txt");
+        sendCurrData(counterSave.saveDict, dictSize_2, false);
       }
-      
-    }else{
-      file_is_updated = false;
-      BLE_lastUpdate = millis();
-      if(!need_init){
-        displayMassage("BLE is ON", true);
-      }
-    }
   }else{
-    displayMassage("BLE is OFF");
-    unsigned long ble_cur = millis();
-    BLE_lastUpdate = ble_cur;
-    if(ble_cur-BLE_onTime >= 2000){
-      BLE_onTime = ble_cur;
-      if(!need_init){
-        // BLE.disconnect();
-        BLE.stopAdvertise();
-        BLE.end();
-        need_init = true;
-        file_is_updated = false;
-      }
-      BLE_is_on = false;
+    file_is_updated = false;
+    BLE_lastUpdate = millis();
     }
+  }
+}
+
+void bleModeCleanUp(){
+  if(modeSlector != 5){
+    countDown_start = false;
+    if(!ble_need_init){
+    unsigned long BLE_cur = millis();
+    if(BLE_cur-BLE_onTime >= 2000){
+      BLE_onTime  = BLE_cur;
+      if (BLE.connected()) {
+        BLE.disconnect();
+      }
+      BLE.stopAdvertise();
+      BLE.end();
+      ble_need_init = true;
+    }
+  }
   }
 }
 
@@ -992,6 +986,26 @@ void sendEntireTxt(String fileName, int _dicSize){
   } else {
     Serial.println("SD CARD ERROR");
   }
+}
+
+void sendCurrData(keyValuePair _save[], int _dicSize, bool is_timer){
+  String packet = "";
+  int lineCount = 0;
+
+  for(int i=0; i<_dicSize; i++){
+    String line = "";
+    if(is_timer){
+      line =  customName.saveDict[i].key + ":"+ String(_save[i].value) + "\n";
+    }else{
+      line =  customName.saveDict[i+dictSize_1].key + ":"+ String(_save[i].value) + "\n";
+    }
+    packet += line;
+  }
+  packet += configSave.saveDict[1].key + ":" + String(configSave.saveDict[1].value) + "\n";
+
+  fileCharacteristic.setValue(packet.c_str());
+  displayMassage("Seding Data");
+  delay(500);
 }
 
 void splitString(String input, String output[], int _dicSize) {

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createNoise3D } from 'simplex-noise';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {totalKeys_1, totalValues_1_2num, data_is_loaded} from '../JavaScript/ble.js'
@@ -36,7 +37,7 @@ camera.position.y = 0.6;
 // init orbitControls
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.enablePan = false;
+// controls.enablePan = false;
 
 // add lights
 const ambientLight = new THREE.AmbientLight(0x404040, 2); // for light up everything
@@ -51,32 +52,37 @@ const loader = new GLTFLoader();
 const cubeGroup = [];
 const unitOne = new THREE.Group();
 const BIGGroup = new THREE.Group();
+let colorPalette = [];
+let uniqueKeys = [];
+let clearGroupIndexArray = [];
 let need_init = true;
 let jarIndex_test = 0;
 let jar;
 
-// const allKeys = [
-//   ['testA', 'testB', 'testC','runtime'],
-//   ['A', 'B', 'C','runtime'],
-//   ['t23', '*(&s', 'lol','runtime'],
-//   ['testA', 'testB', 'testC','runtime'],
-//   ['A', 'B', 'C','runtime'],
-//   ['t23', '*(&s', 'lol','runtime']
-// ];
-// const allValues = [
-//   [10, 20, 11, 206],
-//   [12, 5, 11, 20600],
-//   [12, 25, 11, 20600],
-//   [10, 20, 11, 206],
-//   [12, 5, 11, 20600],
-//   [12, 25, 11, 20600]
-// ];
+const noise3D = createNoise3D();
+
+const allKeys = [
+  ['testA', 'testB', 'testC','runtime'],
+  ['A', 'B', 'C','runtime'],
+  ['t23', '*(&s', 'lol','runtime'],
+  ['testA', 'testB', 'testC','runtime'],
+  ['A', 'B', 'C','runtime'],
+  ['t23', '*(&s', 'lol','runtime']
+];
+const allValues = [
+  [10, 20, 11, 206],
+  [12, 5, 11, 20600],
+  [12, 25, 11, 20600],
+  [10, 20, 11, 206],
+  [12, 5, 11, 20600],
+  [12, 25, 11, 20600]
+];
 
 animate();
 
 // Animation function
 function animate() {
-  // console.log(data_is_loaded);
+  const time = performance.now();
   if(data_is_loaded && need_init){
     need_init = false;
     scene.remove(jar);
@@ -91,10 +97,18 @@ function animate() {
   BIGGroup.position.x += (targetXOffset - BIGGroup.position.x) * moveSpeed;
   // cubeGroup.rotation.x += 0.002;
   // cubeGroup.rotation.z += 0.002;
+  var clearGroupIndex = 0;
+  var indexTemp = 0;
 
-  cubeGroup.forEach(groupC => {
-    groupC.rotation.x += 0.002;
-    groupC.rotation.z += 0.002;
+  cubeGroup.forEach((groupC, index) => {
+    if(indexTemp >= clearGroupIndexArray[clearGroupIndex]){
+      clearGroupIndex += 1;
+      indexTemp = 0;
+    }
+    indexTemp += 1;
+    groupC.rotation.x += (0.002 + noise3D(clearGroupIndex ,time/1000 , index/100)/1000);
+    groupC.rotation.y += (0.002 + noise3D(clearGroupIndex ,time/1000 , index/100)/1000);
+    groupC.position.y += Math.sin(time/1000 + clearGroupIndex)/1500;
   });
 
   controls.update();
@@ -118,6 +132,12 @@ loader.load(
       }
     });
     scene.add(jar);
+
+    // handleData(allKeys, allValues);
+    // BIGGroup.add(unitOne);
+    // scene.add(BIGGroup);
+    // console.log(cubeGroup.length);
+
   },
   function ( xhr ) {
 		console.log( ( xhr.loaded / xhr.total * 100 ) + '% loaded' );
@@ -346,24 +366,38 @@ function calculateMatchingColor(inputColor, colorA, colorB) {
   return rgbToHex(resultRgb);
 }
 
-function generateColorPalette() {
+function generateColorPalette(numColors = 3) {
   // 随机生成一个基准色 (baseColor) 的 HSL 值
   const baseHue = Math.floor(Math.random() * 360); // 色相 [0, 360)
   const baseSaturation = 70; // 固定饱和度为 70%
   const baseLightness = 50; // 固定亮度为 50%
+  if(numColors === 3){
+    // 定义符合配色原理的色相偏移量
+    const offset1 = 70; // 第一个偏移角度（类比色）
+    const offset2 = 140; // 第二个偏移角度（互补色）
 
-  // 定义符合配色原理的色相偏移量
-  const offset1 = 70; // 第一个偏移角度（类比色）
-  const offset2 = 140; // 第二个偏移角度（互补色）
+    // 生成三种颜色
+    const colors = [
+    hslToRgbHex(baseHue, baseSaturation, baseLightness), 
+    hslToRgbHex((baseHue + offset1) % 360, baseSaturation, baseLightness), 
+    hslToRgbHex((baseHue + offset2) % 360, baseSaturation, baseLightness), 
+    ];
 
-  // 生成三种颜色
-  const colors = [
-    hslToRgbHex(baseHue, baseSaturation, baseLightness),                  // 基准色
-    hslToRgbHex((baseHue + offset1) % 360, baseSaturation, baseLightness), // 类比色
-    hslToRgbHex((baseHue + offset2) % 360, baseSaturation, baseLightness), // 互补色
-  ];
+    return colors;
+
+  }else{
+    // 根据需要生成的颜色数量，动态计算色相偏移量
+    const offsetStep = 360 / numColors;
+
+    // 生成指定数量的颜色
+    const colors = Array.from({ length: numColors }, (_, i) => {
+    const hue = (baseHue + i * offsetStep) % 360; // 计算色相
+    return hslToRgbHex(hue, baseSaturation, baseLightness);
+  });
 
   return colors;
+
+  }
 }
 
 function getBowlingPosition(index) {
@@ -383,46 +417,57 @@ function getBowlingPosition(index) {
 }
 
 function handleData(allKeys, allValues){
-  var numJar = 0;
+  uniqueKeys = [...new Set(allKeys.flat())];
+  console.log(uniqueKeys);
+  colorPalette = generateColorPalette(uniqueKeys.length-1);
+  var numJars = 0;
   jarIndex_test = 0;
-  allValues.forEach(values => {
-    for(var i=0; i<3; i++){
-      numJar += values[i];
-    }
+
+  allValues.forEach((values, index) => {
+    const array20 = splitArray(values);
+    numJars += array20.length;
   });
 
-  for(var i=0; i<numJar/2+1; i++){
+  for(var i=0; i<numJars; i++){
     cubeGroup.push(new THREE.Group);
   }
   
   allKeys.forEach((keys, index) => {
     data2Unit(keys, allValues[index], index*4);
   });
+
+  console.log(clearGroupIndexArray);
 }
 
 function data2Unit(keys, values, shiftX=0, shiftY=0, shiftZ=0, ){
-  const colorGens = generateColorPalette();
   const array20 = splitArray(values);
+  var numJarTemp = 0;
   array20.forEach((value, index) => {
     const { x, y, z } = getBowlingPosition(index);
-    data2jar(jarIndex_test, keys, value, colorGens, shiftX+x, shiftY+y, shiftZ+z);
+    data2jar(jarIndex_test, keys, value, shiftX+x, shiftY+y, shiftZ+z);
     jarIndex_test += 1;
+    numJarTemp += 1;
   });
+  clearGroupIndexArray.push(numJarTemp);
 }
 
-function data2jar(jarIndex, keys, values, colorArr, centerX = 0, centerY = 0, centerZ = 0, numInputs = 3){
-  // const colorGens = generateColorPalette();
+function data2jar(jarIndex, keys, values, centerX = 0, centerY = 0, centerZ = 0, numInputs = 3){
   cubeGroup[jarIndex].position.set(centerX, centerY, centerZ);
-  console.log(cubeGroup[jarIndex].position);
+  // console.log(cubeGroup[jarIndex].position);
   const textArr = [];
   keys.forEach((item, index) => {
+    const paletteIndex = uniqueKeys.indexOf(item);
     if(index != 3){
       for(var i=0; i<values[index]; i++){
-        createCubeFrame(cubeIndex, 0, 0, 0, cubeGroup[jarIndex], colorArr[index]);
+        createCubeFrame(cubeIndex, 0, 0, 0, cubeGroup[jarIndex], colorPalette[paletteIndex]);
         cubeIndex += 1;
       }
     }
-    textArr.push(item + ': ' + values[index]);
+    if(index === 3){
+      textArr.push(item + ': ' + Math.floor((values[index]/(60*60))*10)/10 + ' h');
+    }else{
+      textArr.push(item + ': ' + values[index]);
+    }
   });
 
   cubeIndex = 0;
