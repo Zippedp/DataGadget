@@ -33,10 +33,6 @@
     <button id="disconnectBleButton">Disconnect BLE</button>
     <p>BLE state: <strong><span id="bleState" style="color:#d13a30;">Disconnected</span></strong></p>
     <hr>
-    <h3>Control Test Pin</h3> 
-    <button id="onButton">ON</button>
-    <button id="offButton">OFF</button>
-    <hr>
     <h3>Custom Name</h3>
     <form>
         <label>
@@ -52,6 +48,10 @@
     <button id="submitButton">Change</button>
     <p id="errorMessage" style="color: red; display: none;"></p>
   </div>
+</div>
+<div class="alwaysOnUI">
+  <p id="dataDisplay" style="color: rgb(195, 195, 210);">- : -<br>- : -<br>- : -<br></p>
+  <button class="alwaysOnUI" id="changeDispalyButton">Go to Timer</button>
 </div>
   <canvas class="webgl"></canvas>
 </body>

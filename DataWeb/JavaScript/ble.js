@@ -4,8 +4,6 @@
 const connectButton = document.getElementById('connectBleButton');
 const disconnectButton = document.getElementById('disconnectBleButton');
 const bleStateContainer = document.getElementById('bleState');
-const onButton = document.getElementById('onButton');
-const offButton = document.getElementById('offButton');
 const radioButtons = document.querySelectorAll('input[name="uploadSlector"]');
 const input1 = document.getElementById('input1');
 const input2 = document.getElementById('input2');
@@ -38,18 +36,16 @@ let timer = null;
 export let data_is_loaded = false;
 export const totalKeys = [];
 const totalValues = [];
-export var totalValues_2num = [];
+export let totalValues_2num = [];
 
 export const totalKeys_1 = [];
 const totalValues_1 = [];
-export var totalValues_1_2num = [];
+export let totalValues_1_2num = [];
 
 // Event Listeners
 connectButton.addEventListener('click', connectToDevice);
 disconnectButton.addEventListener('click', disconnectDevice);
 submitButton.addEventListener('click', handleSubmit);
-onButton.addEventListener('click', () => writeOnCharacteristic(1));
-offButton.addEventListener('click', () => writeOnCharacteristic(0));
 
 // Connect to BLE Device
 async function connectToDevice() {
@@ -133,25 +129,6 @@ function submitBLE() {
             });
     } else {
         alert("BLE not connected");
-    }
-}
-
-// Write to LED Characteristic
-function writeOnCharacteristic(value) {
-    if (bleServer && bleServer.connected) {
-        bleServiceFound.getCharacteristic(ledCharacteristic)
-            .then(characteristic => {
-                const data = new Uint8Array([value]);
-                return characteristic.writeValue(data);
-            })
-            .then(() => {
-                console.log("LED state updated:", value ? "ON" : "OFF");
-            })
-            .catch(error => {
-                console.error("Error writing to LED characteristic:", error);
-            });
-    } else {
-        alert("Bluetooth is not connected. Connect first!");
     }
 }
 
@@ -265,10 +242,10 @@ function diviceInput(event){
 }
 
 window.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowDown') {
-        data_is_loaded = true;
-        console.log("pressed: ", data_is_loaded);
-    }
+    // if (event.key === 'ArrowDown') {
+    //     data_is_loaded = true;
+    //     console.log("pressed: ", data_is_loaded);
+    // }
   });
 
 async function triggerDataLoaded() {

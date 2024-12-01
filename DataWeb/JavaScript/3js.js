@@ -2,25 +2,26 @@ import * as THREE from 'three';
 import { createNoise3D } from 'simplex-noise';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import {totalKeys_1, totalValues_1_2num, data_is_loaded} from '../JavaScript/ble.js'
+import {totalKeys, totalValues_2num, totalKeys_1, totalValues_1_2num, data_is_loaded} from '../JavaScript/ble.js'
 
-// if(data_is_loaded && need_init){
-//   need_init = false;
-//   handleData(totalKeys_1, totalValues_1_2num);
-//   BIGGroup.add(unitOne);
-//   scene.add(BIGGroup);
-// }
+const canvas = document.querySelector('.webgl');
+const changeDispalyButton = document.getElementById('changeDispalyButton');
+const dataDisplayText = document.getElementById('dataDisplay');
+
 // var for movement smooth
 let targetXOffset = 0;
 let moveSpeed = 0.05;
 let numberTester = 0;
 let cubeIndex = 0;
+let senceSelector = 0;
+let dataDisplayIndex = 0;
 
 // create scene
 const scene = new THREE.Scene();
+const scene_Timer = new THREE.Scene();
 // scene.fog = new THREE.Fog( 0x3f7b9d, 1, 20 );
-const canvas = document.querySelector('.webgl');
 
+changeDispalyButton.addEventListener('click', changeData);
 // create renderer
 // const renderer = new THREE.WebGLRenderer({ canvas , alpha: true });
 const renderer = new THREE.WebGLRenderer({ canvas });
@@ -30,34 +31,55 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 // create camera
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
 camera.position.z = 10;
 camera.position.y = 0.6;
 
 // init orbitControls
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-// controls.enablePan = false;
+controls.enablePan = false;
 
 // add lights
-const ambientLight = new THREE.AmbientLight(0x404040, 2); // for light up everything
-const light = new THREE.PointLight(0xffffff, 13, 100); // for light up selected one
-light.position.set(1.5, 2, 2);
-light.castShadow = true;
-scene.add(light);
+const ambientLight = new THREE.AmbientLight(0x404040, 2);
+const cameraLight = new THREE.PointLight(0xffffff, 13, 100); 
+cameraLight.position.set(1.5, 2, 2);
+cameraLight.castShadow = true;
+
 scene.add(ambientLight);
+scene.add(cameraLight);
+
+const ambientLight_1 = ambientLight.clone();
+const cameraLight_1 = cameraLight.clone();
+cameraLight.position.set(1.5, 2, 2);
+cameraLight.castShadow = true;
+
+scene_Timer.add(ambientLight_1);
+scene_Timer.add(cameraLight_1);
 
 // load GLTF model
 const loader = new GLTFLoader();
-const cubeGroup = [];
+const cubeGroup_Counter = [];
+const cubeGroup_Timer = [];
+const unitGroup_Counter = [];
+const unitGroup_Timer = [];
 const unitOne = new THREE.Group();
-const BIGGroup = new THREE.Group();
+const BIGGroup_Timer = new THREE.Group();
+const BIGGroup_Counter = new THREE.Group();
 let colorPalette = [];
 let uniqueKeys = [];
-let clearGroupIndexArray = [];
+let unitIndexArray = [];
 let need_init = true;
 let jarIndex_test = 0;
 let jar;
+let jar_for_Timer;
+let arrangeRadius;
+let camPosition;
+
+let displayText_timer = [];
+let displayText_counter = [];
+
+// let timeCandys = [];
 
 const noise3D = createNoise3D();
 
@@ -71,48 +93,112 @@ const allKeys = [
 ];
 const allValues = [
   [10, 20, 11, 206],
-  [12, 5, 11, 20600],
+  [12, 50, 11, 20600],
   [12, 25, 11, 20600],
   [10, 20, 11, 206],
-  [12, 5, 11, 20600],
-  [12, 25, 11, 20600]
+  [12, 50, 11, 20600],
+  [12, 25, 101, 20600]
+];
+const allTimers = [
+  [1000000, 20080000, 1100000, 20600000],
+  [12000000, 500000, 11000, 20600000],
+  [12008000, 250000, 100001, 2060000],
+  [100000, 200800, 11000800, 2000006],
+  [1000002, 5000000, 1100000, 206000880],
+  [12000000, 2500000, 10001, 20600]
 ];
 
 animate();
 
 // Animation function
 function animate() {
+  requestAnimationFrame(animate); // Loop the animation function
+
   const time = performance.now();
   if(data_is_loaded && need_init){
     need_init = false;
     scene.remove(jar);
-    handleData(totalKeys_1, totalValues_1_2num);
-    BIGGroup.add(unitOne);
-    scene.add(BIGGroup);
-    console.log(totalKeys_1, totalValues_1_2num);
-  }
-  requestAnimationFrame(animate); // Loop the animation function
+    scene_Timer.remove(jar_for_Timer);
 
-  // Smoothly move all meshes to the target position
-  BIGGroup.position.x += (targetXOffset - BIGGroup.position.x) * moveSpeed;
-  // cubeGroup.rotation.x += 0.002;
-  // cubeGroup.rotation.z += 0.002;
-  var clearGroupIndex = 0;
-  var indexTemp = 0;
+    // displayText_timer = makeDisplayArray(allKeys, allTimers, 3600000, 'h');
+    // displayText_counter = makeDisplayArray(allKeys, allValues);
 
-  cubeGroup.forEach((groupC, index) => {
-    if(indexTemp >= clearGroupIndexArray[clearGroupIndex]){
-      clearGroupIndex += 1;
-      indexTemp = 0;
+    displayText_timer = makeDisplayArray(totalKeys,  totalValues_2num, 3600000, 'h');
+    displayText_counter = makeDisplayArray(totalKeys_1,  totalValues_1_2num);
+
+    if(senceSelector === 0){
+      dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+      dataDisplayText.style.color = 'rgb(195, 195, 210)';
+    }else if(senceSelector === 1){
+      dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+      dataDisplayText.style.color = 'rgb(195, 195, 210)';
     }
-    indexTemp += 1;
-    groupC.rotation.x += (0.002 + noise3D(clearGroupIndex ,time/1000 , index/100)/1000);
-    groupC.rotation.y += (0.002 + noise3D(clearGroupIndex ,time/1000 , index/100)/1000);
-    groupC.position.y += Math.sin(time/1000 + clearGroupIndex)/1500;
-  });
+    
+    // handleTimerData(allKeys, allTimers);
+    // console.log(allKeys, allTimers);
+
+    // handleCounterData(allKeys, allValues);
+    // console.log(allKeys, allValues);
+
+    handleTimerData(totalKeys, totalValues_2num);
+    console.log(totalKeys, totalValues_2num);
+
+    handleCounterData(totalKeys_1, totalValues_1_2num);
+    console.log(totalKeys_1, totalValues_1_2num);
+
+    // positionMeshesOnCircle(unitGroup_Counter);
+    // camera.position.z = 0;
+    // camera.rotation.set(0,0,0);
+
+    unitGroup_Timer.forEach(unit => {
+      BIGGroup_Timer.add(unit);
+    });
+    scene_Timer.add(BIGGroup_Timer);
+
+    unitGroup_Counter.forEach(unit => {
+      BIGGroup_Counter.add(unit);
+    });
+    scene.add(BIGGroup_Counter);
+  }
 
   controls.update();
-  renderer.render(scene, camera);
+
+  // Smoothly move all meshes to the target position
+  BIGGroup_Timer.position.x += (targetXOffset - BIGGroup_Timer.position.x) * moveSpeed;
+  BIGGroup_Counter.position.x += (targetXOffset - BIGGroup_Counter.position.x) * moveSpeed;
+
+  if(senceSelector === 0){
+    let clearGroupIndex = 0;
+    let indexTemp = 0;
+
+    cubeGroup_Counter.forEach((group, index) => {
+      if(indexTemp >= unitIndexArray[clearGroupIndex]){
+        clearGroupIndex += 1;
+        indexTemp = 0;
+      }
+      indexTemp += 1;
+      group.rotation.x += (0.002 + noise3D(clearGroupIndex ,time/1000 , index/100)/1000);
+      group.rotation.y += (0.002 + noise3D(clearGroupIndex ,time/1000 , index/100)/1000);
+      group.position.y += Math.sin(time/1000 + clearGroupIndex)/1500;
+    });
+    renderer.render(scene, camera);
+
+  }else if(senceSelector ===1){
+    let clearGroupIndex = 0;
+    let indexTemp = 0;
+
+    cubeGroup_Timer.forEach((group, index) => {
+      if(indexTemp >= unitIndexArray[clearGroupIndex]){
+        clearGroupIndex += 1;
+        indexTemp = 0;
+      }
+      indexTemp += 1;
+      group.rotation.x += (0.002 + noise3D(clearGroupIndex ,time/1000 , index/100)/1000);
+      group.rotation.y += (0.002 + noise3D(clearGroupIndex ,time/1000 , index/100)/1000);
+      group.position.y += Math.sin(time/1000 + clearGroupIndex)/1500;
+    });
+    renderer.render(scene_Timer, camera);
+  }
 }
 
 loader.load(
@@ -131,13 +217,9 @@ loader.load(
         child.material = glassToonMaterial; // Replace the material of the child object
       }
     });
+    jar_for_Timer = jar.clone();
     scene.add(jar);
-
-    // handleData(allKeys, allValues);
-    // BIGGroup.add(unitOne);
-    // scene.add(BIGGroup);
-    // console.log(cubeGroup.length);
-
+    scene_Timer.add(jar_for_Timer);
   },
   function ( xhr ) {
 		console.log( ( xhr.loaded / xhr.total * 100 ) + '% loaded' );
@@ -291,13 +373,47 @@ window.addEventListener('resize', () => {
 
 // keydown events for 3js cam movments
 window.addEventListener('keydown', (event) => {
-  if (event.key === 'ArrowLeft') {
-    targetXOffset += 4;
-  } else if (event.key === 'ArrowRight') {
-    targetXOffset -= 4;
-  } else if (event.key === 'ArrowUp') {
-    numberTester += 1;
+  let arrayLenth = 0;
+  if(senceSelector === 0){
+    arrayLenth = totalKeys_1.length-1;
+  }else if(senceSelector === 1){
+    arrayLenth = totalKeys.length-1;
   }
+
+  if (event.key === 'ArrowLeft') {
+    if(dataDisplayIndex <= 0){
+      targetXOffset = -arrayLenth*4;
+      dataDisplayIndex = arrayLenth;
+    }else{
+      targetXOffset += 4;
+      dataDisplayIndex -= 1;
+    }
+
+    if(senceSelector === 0){
+      dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+    }else if(senceSelector === 1){
+      dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+    }
+
+  } else if (event.key === 'ArrowRight') {
+    if(dataDisplayIndex >= arrayLenth){
+      targetXOffset = 0;
+      dataDisplayIndex = 0;
+    }else{
+      dataDisplayIndex += 1;
+      targetXOffset -= 4;
+    }
+
+    if(senceSelector === 0){
+      dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+    }else if(senceSelector === 1){
+      dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+    }
+
+  } else if (event.key === 'ArrowUp') {
+    // numberTester += 1;
+  }
+  console.log(dataDisplayIndex);
 });
 
 export function targetOP(opInput){
@@ -401,6 +517,7 @@ function generateColorPalette(numColors = 3) {
 }
 
 function getBowlingPosition(index) {
+  let coefficient = 1;
   let row = 0;
   let count = 0;
   while (count <= index) {
@@ -409,18 +526,38 @@ function getBowlingPosition(index) {
   }
   const col = index - (count - row);
 
-  const x = col*2 - (row - 1); 
+  const x = (col*2 - (row - 1))*coefficient; 
   const y = row*0.5; 
-  const z = 2 -row * 2;
+  const z = 2 -(row * 2)*coefficient;
 
   return { x, y, z };
 }
 
-function handleData(allKeys, allValues){
+function handleTimerData(allKeys, allValues){
+  let timeCandys = convertTimersToHours(allValues, mili2Hour);
   uniqueKeys = [...new Set(allKeys.flat())];
-  console.log(uniqueKeys);
   colorPalette = generateColorPalette(uniqueKeys.length-1);
-  var numJars = 0;
+  let numJars = 0;
+  jarIndex_test = 0;
+
+  timeCandys.forEach((values, index) => {
+    const array20 = splitArray(values);
+    numJars += array20.length;
+  });
+
+  for(let i=0; i<numJars; i++){
+    cubeGroup_Timer.push(new THREE.Group);
+  }
+  
+  allKeys.forEach((keys, index) => {
+    data2Unit(keys, timeCandys[index], unitGroup_Timer, cubeGroup_Timer ,index*4);
+  });
+}
+
+function handleCounterData(allKeys, allValues){
+  uniqueKeys = [...new Set(allKeys.flat())];
+  colorPalette = generateColorPalette(uniqueKeys.length-1);
+  let numJars = 0;
   jarIndex_test = 0;
 
   allValues.forEach((values, index) => {
@@ -428,38 +565,45 @@ function handleData(allKeys, allValues){
     numJars += array20.length;
   });
 
-  for(var i=0; i<numJars; i++){
-    cubeGroup.push(new THREE.Group);
+  for(let i=0; i<numJars; i++){
+    cubeGroup_Counter.push(new THREE.Group);
   }
   
   allKeys.forEach((keys, index) => {
-    data2Unit(keys, allValues[index], index*4);
+    data2Unit(keys, allValues[index], unitGroup_Counter, cubeGroup_Counter ,index*4);
+    // data2Unit(keys, allValues[index], unitGroup_Counter, cubeGroup_Counter , 0);
   });
-
-  console.log(clearGroupIndexArray);
 }
 
-function data2Unit(keys, values, shiftX=0, shiftY=0, shiftZ=0, ){
+function data2Unit(keys, values, unitGroupContainer, contentGroupContainer, shiftX=0, shiftY=0, shiftZ=0){
+  const unitContainer = new THREE.Group();
   const array20 = splitArray(values);
-  var numJarTemp = 0;
+  let numJarTemp = 0;
   array20.forEach((value, index) => {
     const { x, y, z } = getBowlingPosition(index);
-    data2jar(jarIndex_test, keys, value, shiftX+x, shiftY+y, shiftZ+z);
+    data2jar(jarIndex_test, keys, value, unitContainer, contentGroupContainer, shiftX+x, shiftY+y, shiftZ+z);
     jarIndex_test += 1;
     numJarTemp += 1;
   });
-  clearGroupIndexArray.push(numJarTemp);
+  unitGroupContainer.push(unitContainer);
+  unitIndexArray.push(numJarTemp);
+  
 }
 
-function data2jar(jarIndex, keys, values, centerX = 0, centerY = 0, centerZ = 0, numInputs = 3){
-  cubeGroup[jarIndex].position.set(centerX, centerY, centerZ);
+function data2jar(jarIndex, keys, values, unitContainer, contentGroupContainer, centerX = 0, centerY = 0, centerZ = 0){
+  // let sizeTemXZ = 1+(1-Math.random())*0.2;
+  // let sizeTempY = 1+(1-Math.random())*0.5;
+  let sizeTemXZ = 0;
+  let sizeTempY = 0;
+
+  contentGroupContainer[jarIndex].position.set(centerX, centerY, centerZ);
   // console.log(cubeGroup[jarIndex].position);
   const textArr = [];
   keys.forEach((item, index) => {
     const paletteIndex = uniqueKeys.indexOf(item);
     if(index != 3){
-      for(var i=0; i<values[index]; i++){
-        createCubeFrame(cubeIndex, 0, 0, 0, cubeGroup[jarIndex], colorPalette[paletteIndex]);
+      for(let i=0; i<values[index]; i++){
+        createCubeFrame(cubeIndex, 0, 0, 0, contentGroupContainer[jarIndex], colorPalette[paletteIndex]);
         cubeIndex += 1;
       }
     }
@@ -471,12 +615,18 @@ function data2jar(jarIndex, keys, values, centerX = 0, centerY = 0, centerZ = 0,
   });
 
   cubeIndex = 0;
+  // const textLable = createTextPlane(textArr, { x: centerX, y: centerY-0.4, z: centerZ+1+(sizeTemXZ-1) });
   const textLable = createTextPlane(textArr, { x: centerX, y: centerY-0.4, z: centerZ+1 });
   const jarrr = jar.clone();
+
+  
+  // jarrr.scale.set(sizeTemXZ, sizeTempY, sizeTemXZ);
+
+  // jarrr.position.set(centerX, centerY+(sizeTempY-1), centerZ);
   jarrr.position.set(centerX, centerY, centerZ);
-  unitOne.add(jarrr);
-  unitOne.add(cubeGroup[jarIndex]);
-  unitOne.add(textLable);
+  unitContainer.add(jarrr);
+  unitContainer.add(contentGroupContainer[jarIndex]);
+  unitContainer.add(textLable);
   // unitOne.rotation.y = -0.55;
 }
 
@@ -555,4 +705,168 @@ function splitArray(arr) {
   }
 
   return result;
+}
+
+function changeData(){
+  if(senceSelector === 0){
+    senceSelector = 1;
+    changeDispalyButton.innerHTML = 'Go to Counter';
+  }else if(senceSelector === 1){
+    senceSelector = 0;
+    changeDispalyButton.innerHTML = 'Go to Timer';
+  }
+  if(data_is_loaded){
+    if(senceSelector === 0){
+      dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+      dataDisplayText.style.color = 'rgb(195, 195, 210)';
+    }else if(senceSelector === 1){
+      dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+      dataDisplayText.style.color = 'rgb(195, 195, 210)';
+    }
+  }
+}
+
+function time2Score(times) {
+
+  const numValues = times.length; // 输入数组的长度
+  let maxScore = 0; // 用于存储最大得分
+  let totalTime = 0; // 总计时间
+  let tempScore = new Array(numValues).fill(0); // 临时存储未归一化的得分
+  let normalizedScore = new Array(numValues).fill(0); // 最终归一化的得分
+
+  const minTime = 60000.0; // 最小时间（10小时）
+  const maxTime = 180000000.0; // 最大时间（50小时）
+  let coefficient = 0; // 用于归一化计算的系数
+
+  // 计算总时间
+  totalTime = times.reduce((sum, time) => sum + time, 0);
+
+  // 计算每个时间的临时得分（基于比例）
+  for (let i = 0; i < numValues; i++) {
+      tempScore[i] = (times[i] / totalTime) * times[i];
+  }
+
+  // 找到最大得分
+  maxScore = Math.max(...times);
+
+  // 根据总时间计算系数（用于得分调整）
+  coefficient = 1.0 + ((totalTime - minTime) / (maxTime - minTime)) * 19;
+
+  console.log("Max Score:", maxScore);
+  console.log("Coefficient:", coefficient);
+
+  // 将得分归一化到0-5的范围
+  for (let i = 0; i < numValues; i++) {
+      normalizedScore[i] = Math.round((tempScore[i] / maxScore) * coefficient);
+      console.log(`Time: ${times[i]}, Temp Score: ${tempScore[i]}, Normalized Score: ${normalizedScore[i]}`);
+  }
+
+  return normalizedScore;
+}
+
+function mili2Hour(miliseconds){
+  let hoursArry = [];
+  miliseconds.forEach(time => {
+    hoursArry.push(Math.round(time/1800000));
+  });
+  return hoursArry;
+}
+
+function convertTimersToHours(allTimers, mili2Hour) {
+  return allTimers.map(timerSet => {
+      const convertedTimes = mili2Hour(timerSet.slice(0, 3));
+      return [...convertedTimes, timerSet[3]];
+  });
+}
+
+
+function positionMeshesOnCircle(meshArray) {
+  const totalGroups = meshArray.length;
+  const cubeSize = 0.5; // 根据实际方块尺寸调整
+
+  // 计算每个组的每一行方块数量
+  const groupRows = meshArray.map(group => {
+      const numCubes = group.children.length;
+      return getCubesPerRow(numCubes);
+  });
+
+  // 找出所有组中最大的行数
+  const maxRows = Math.max(...groupRows.map(rows => rows.length));
+
+  const angleStep = (2 * Math.PI) / totalGroups; // 等距排列的角度间隔
+  let maxRadius = 0;
+
+  // 对每一行进行计算
+  for (let rowIndex = 0; rowIndex < maxRows; rowIndex++) {
+      // 计算当前行中每个组的宽度
+      const groupWidthsAtRow = [];
+      for (let i = 0; i < totalGroups; i++) {
+          const rows = groupRows[i];
+          let groupWidthAtRow = 0;
+          if (rowIndex < rows.length) {
+              const cubesInRow = rows[rowIndex];
+              groupWidthAtRow = cubesInRow * cubeSize;
+          }
+          groupWidthsAtRow.push(groupWidthAtRow);
+      }
+
+      // 当前行中最大的组宽度
+      const maxGroupWidthAtRow = Math.max(...groupWidthsAtRow);
+
+      // 计算当前行所需的最小半径
+      const radiusRow = (maxGroupWidthAtRow / 2) / Math.sin(angleStep / 2);
+
+      // 更新最大半径
+      if (radiusRow > maxRadius) {
+          maxRadius = radiusRow;
+      }
+  }
+  if(maxRadius<5){
+    maxRadius = 5;
+  }
+  arrangeRadius = maxRadius;
+
+  // 使用计算出的最大半径来设置每个组的位置
+  for (let i = 0; i < totalGroups; i++) {
+      const angle = i * angleStep;
+      const x = maxRadius * Math.cos(angle);
+      const z = maxRadius * Math.sin(angle);
+
+      meshArray[i].position.set(x, 0, z);
+      meshArray[i].lookAt(0, 0, 0); // 使每个组朝向圆心
+  }
+}
+
+// 辅助函数：获取每个组的每一行方块数量
+function getCubesPerRow(numCubes) {
+  let rows = [];
+  let row = 1;
+  let count = 0;
+  while (count < numCubes) {
+      let cubesInRow = row;
+      if (count + cubesInRow > numCubes) {
+          cubesInRow = numCubes - count;
+      }
+      rows.push(cubesInRow);
+      count += cubesInRow;
+      row++;
+  }
+  return rows;
+}
+
+function makeDisplayArray(allKeys, allValues, valueMod = 1, endUnit = ''){
+  let outputArray = [];
+  let unitArray = [];
+  allKeys.forEach((keys, index) => {
+    unitArray = [];
+    keys.forEach((key, pndex) => {
+      if(pndex === 3){
+        unitArray.push(key + ': ' + Math.round(allValues[index][pndex]*10/3600)/10 + ' hrs.');
+      }else{
+        unitArray.push(key + ': ' + Math.round(allValues[index][pndex]*10/valueMod)/10 + endUnit);
+      }
+    });
+    outputArray.push(unitArray);
+  });
+  return outputArray;
 }

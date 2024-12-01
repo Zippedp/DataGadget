@@ -6,6 +6,24 @@
     /* background-color: rgba(200, 210, 210, 0.8); */
   }
 
+  div.alwaysOnUI {
+    position: absolute;
+    z-index: 1;
+    top: 75vh;
+    left: 50vw;
+    transform: translateX(-50%);
+    text-align: center;
+  }
+
+  button.alwaysOnUI{
+    padding: 10px;
+    background-color: #ccc;
+  }
+
+  button.alwaysOnUI:hover {
+    background-color: #63636c;
+  }
+
   canvas.webgl {
     position: fixed;
     top: 0;

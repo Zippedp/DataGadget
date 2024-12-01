@@ -71,6 +71,7 @@ Button* buttons[numButtons];
 bool is_locked = false;
 bool showLock = false;
 bool ble_need_init = true;
+bool bleTimer_need_reset = false;
 const int action_intvl = 300;
 const int runTimeLog_intvl = 300000;
 // const int runTimeLog_intvl = 60000;
@@ -828,6 +829,7 @@ void bleMod(){
   }
 
   if(ble_need_init){
+    bleTimer_need_reset = true;
     if(countDown(3000, "BLE Start in ")){
       if (!BLE.begin()) {
         Serial.println("BLE INIT FAILL");
@@ -911,8 +913,9 @@ void bleMod(){
 }
 
 void bleModeCleanUp(){
-  if(modeSlector != 5){
+  if(modeSlector != 5 && bleTimer_need_reset){
     countDown_start = false;
+    bleTimer_need_reset =false;
     if(!ble_need_init){
     unsigned long BLE_cur = millis();
     if(BLE_cur-BLE_onTime >= 2000){
