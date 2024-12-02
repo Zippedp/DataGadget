@@ -31,7 +31,7 @@
     <hr>
     <button id="connectBleButton">Connect to BLE</button>
     <button id="disconnectBleButton">Disconnect BLE</button>
-    <p>BLE state: <strong><span id="bleState" style="color:#d13a30;">Disconnected</span></strong></p>
+    <p>BLE state: <strong><span id="bleState" style="color:#d13a30;" class="rainbow-text">Disconnected</span></strong></p>
     <hr>
     <h3>Custom Name</h3>
     <form>
@@ -42,11 +42,22 @@
             <input type="radio" name="uploadSlector" value="2"> Counters
         </label>
     </form>
-    <label class="textInput">Input 1: <input type="text" id="input1"></label><br>
-    <label class="textInput">Input 2: <input type="text" id="input2"></label><br>
-    <label class="textInput">Input 3: <input type="text" id="input3"></label><br>
+    <label class="textInput">Name 1: <input type="text" id="input1"></label><br>
+    <label class="textInput">Name 2: <input type="text" id="input2"></label><br>
+    <label class="textInput">Name 3: <input type="text" id="input3"></label><br>
     <button id="submitButton">Change</button>
     <p id="errorMessage" style="color: red; display: none;"></p>
+    <hr>
+    <h3>Experimental Feature</h3>
+    <div>
+      <label class="toggle-container">
+        <label class="switch">
+          <input type="checkbox" id="expCircularToggle">
+          <span class="slider round"></span>
+        </label>
+        <span class="toggle-text" id="expCircularText" style="align-items: center; padding-left: 6px; color: rgb(195, 195, 210);">Circular Arrangement</span>
+    </div>
+    <p id="expErrorMessage" style="color: rgb(195, 195, 210)"></p>
   </div>
 </div>
 <div class="alwaysOnUI">

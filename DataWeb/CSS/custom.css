@@ -103,3 +103,21 @@
     align-items: center; 
     gap: 10px; 
   }
+
+  .rainbow-text {
+    background: linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet, red);
+    background-size: 300%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: rainbow 4s linear infinite;
+  }
+  
+  @keyframes rainbow {
+    0% {
+      background-position: 300% 50%;
+    }
+    100% {
+      background-position: 10% 50%;
+    }
+  }

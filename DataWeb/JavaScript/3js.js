@@ -2,19 +2,26 @@ import * as THREE from 'three';
 import { createNoise3D } from 'simplex-noise';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import {totalKeys, totalValues_2num, totalKeys_1, totalValues_1_2num, data_is_loaded} from '../JavaScript/ble.js'
+import {totalKeys, totalValues_2num, totalKeys_1, totalValues_1_2num, data_is_loaded, recivedValue, inputRecivedIndex} from '../JavaScript/ble.js'
 
 const canvas = document.querySelector('.webgl');
 const changeDispalyButton = document.getElementById('changeDispalyButton');
 const dataDisplayText = document.getElementById('dataDisplay');
+const bleStateContainer = document.getElementById('bleState');
+const circularToggle = document.getElementById('expCircularToggle');
+const circularText = document.getElementById('expCircularText');
+const expErrorMessage = document.getElementById('expErrorMessage');
 
 // var for movement smooth
 let targetXOffset = 0;
 let moveSpeed = 0.05;
-let numberTester = 0;
 let cubeIndex = 0;
 let senceSelector = 0;
 let dataDisplayIndex = 0;
+let arrangeRadius = 0;
+let is_quickFixSkip = false;
+let disable_keyInput = false;
+let reciveIndexCount = 0;
 
 // create scene
 const scene = new THREE.Scene();
@@ -22,6 +29,7 @@ const scene_Timer = new THREE.Scene();
 // scene.fog = new THREE.Fog( 0x3f7b9d, 1, 20 );
 
 changeDispalyButton.addEventListener('click', changeData);
+circularToggle.addEventListener('change', switchArrangeMod);
 // create renderer
 // const renderer = new THREE.WebGLRenderer({ canvas , alpha: true });
 const renderer = new THREE.WebGLRenderer({ canvas });
@@ -41,7 +49,7 @@ controls.enableDamping = true;
 controls.enablePan = false;
 
 // add lights
-const ambientLight = new THREE.AmbientLight(0x404040, 2);
+const ambientLight = new THREE.AmbientLight(0x404040, 4);
 const cameraLight = new THREE.PointLight(0xffffff, 13, 100); 
 cameraLight.position.set(1.5, 2, 2);
 cameraLight.castShadow = true;
@@ -63,7 +71,6 @@ const cubeGroup_Counter = [];
 const cubeGroup_Timer = [];
 const unitGroup_Counter = [];
 const unitGroup_Timer = [];
-const unitOne = new THREE.Group();
 const BIGGroup_Timer = new THREE.Group();
 const BIGGroup_Counter = new THREE.Group();
 let colorPalette = [];
@@ -73,17 +80,19 @@ let need_init = true;
 let jarIndex_test = 0;
 let jar;
 let jar_for_Timer;
-let arrangeRadius;
-let camPosition;
 
 let displayText_timer = [];
 let displayText_counter = [];
 
-// let timeCandys = [];
 
 const noise3D = createNoise3D();
 
-const allKeys = [
+let allTimerKey = [];
+let allTimerValue = [];
+let allCounterKey = [];
+let allCounterValue = [];
+
+const allKeys_test = [
   ['testA', 'testB', 'testC','runtime'],
   ['A', 'B', 'C','runtime'],
   ['t23', '*(&s', 'lol','runtime'],
@@ -91,7 +100,7 @@ const allKeys = [
   ['A', 'B', 'C','runtime'],
   ['t23', '*(&s', 'lol','runtime']
 ];
-const allValues = [
+const allValues_test = [
   [10, 20, 11, 206],
   [12, 50, 11, 20600],
   [12, 25, 11, 20600],
@@ -99,13 +108,13 @@ const allValues = [
   [12, 50, 11, 20600],
   [12, 25, 101, 20600]
 ];
-const allTimers = [
-  [1000000, 20080000, 1100000, 20600000],
-  [12000000, 500000, 11000, 20600000],
-  [12008000, 250000, 100001, 2060000],
-  [100000, 200800, 11000800, 2000006],
-  [1000002, 5000000, 1100000, 206000880],
-  [12000000, 2500000, 10001, 20600]
+const allTimers_test = [
+  [1000000, 20080000, 1100000, 2060],
+  [12000000, 500000, 11000, 20600],
+  [12008000, 250000, 100001, 20600],
+  [100000, 200800, 11000800, 2000000],
+  [1000002, 5000000, 1100000, 2060008],
+  [12000000, 2500000, 10001, 20600000]
 ];
 
 animate();
@@ -116,39 +125,47 @@ function animate() {
 
   const time = performance.now();
   if(data_is_loaded && need_init){
+    bleStateContainer.style.color = '#24af37';
+    bleStateContainer.className = '';
+    bleStateContainer.innerHTML = "Done";
     need_init = false;
     scene.remove(jar);
     scene_Timer.remove(jar_for_Timer);
 
-    // displayText_timer = makeDisplayArray(allKeys, allTimers, 3600000, 'h');
-    // displayText_counter = makeDisplayArray(allKeys, allValues);
+    allTimerKey = totalKeys;
+    allTimerValue =  runTime2Duration(totalValues_2num);
+    allCounterKey = totalKeys_1;
+    allCounterValue = runTime2Duration(totalValues_1_2num);
 
-    displayText_timer = makeDisplayArray(totalKeys,  totalValues_2num, 3600000, 'h');
-    displayText_counter = makeDisplayArray(totalKeys_1,  totalValues_1_2num);
+    displayText_timer = makeDisplayArray(allTimerKey,  allTimerValue, 3600000, 'h');
+    displayText_counter = makeDisplayArray(allCounterKey,  allCounterValue);
 
-    if(senceSelector === 0){
-      dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
-      dataDisplayText.style.color = 'rgb(195, 195, 210)';
-    }else if(senceSelector === 1){
-      dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
-      dataDisplayText.style.color = 'rgb(195, 195, 210)';
+    if(!circularToggle.checked){
+      if(senceSelector === 0){
+        targetXOffset = -(allCounterKey.length-1)*4;
+        dataDisplayIndex = allCounterKey.length-1;
+        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+        dataDisplayText.style.color = 'rgb(195, 195, 210)';
+      }else if(senceSelector === 1){
+        targetXOffset = -(allTimerKey.length-1)*4;
+        dataDisplayIndex = allTimerKey.length-1;
+        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+        dataDisplayText.style.color = 'rgb(195, 195, 210)';
+      }
     }
-    
-    // handleTimerData(allKeys, allTimers);
-    // console.log(allKeys, allTimers);
 
-    // handleCounterData(allKeys, allValues);
-    // console.log(allKeys, allValues);
+    handleTimerData(allTimerKey, allTimerValue);
+    console.log(allTimerKey, allTimerValue);
 
-    handleTimerData(totalKeys, totalValues_2num);
-    console.log(totalKeys, totalValues_2num);
+    handleCounterData(allCounterKey, allCounterValue);
+    console.log(allCounterKey, allCounterValue);
 
-    handleCounterData(totalKeys_1, totalValues_1_2num);
-    console.log(totalKeys_1, totalValues_1_2num);
-
-    // positionMeshesOnCircle(unitGroup_Counter);
-    // camera.position.z = 0;
-    // camera.rotation.set(0,0,0);
+    unitGroup_Counter.forEach((Counter, index) => {
+      Counter.position.set(index*4, 0, 0);
+    });
+    unitGroup_Timer.forEach((Timer, index) =>{
+      Timer.position.set(index*4, 0, 0);
+    })
 
     unitGroup_Timer.forEach(unit => {
       BIGGroup_Timer.add(unit);
@@ -158,14 +175,22 @@ function animate() {
     unitGroup_Counter.forEach(unit => {
       BIGGroup_Counter.add(unit);
     });
+
     scene.add(BIGGroup_Counter);
   }
 
+  diviceInputUpdate(inputRecivedIndex, recivedValue);
   controls.update();
+
+  // if(!is_quickFixSkip){ 
+  //   moveSpeed = 0.05;
+  // } 
+  // is_quickFixSkip = false;
 
   // Smoothly move all meshes to the target position
   BIGGroup_Timer.position.x += (targetXOffset - BIGGroup_Timer.position.x) * moveSpeed;
   BIGGroup_Counter.position.x += (targetXOffset - BIGGroup_Counter.position.x) * moveSpeed;
+  
 
   if(senceSelector === 0){
     let clearGroupIndex = 0;
@@ -373,56 +398,50 @@ window.addEventListener('resize', () => {
 
 // keydown events for 3js cam movments
 window.addEventListener('keydown', (event) => {
-  let arrayLenth = 0;
-  if(senceSelector === 0){
-    arrayLenth = totalKeys_1.length-1;
-  }else if(senceSelector === 1){
-    arrayLenth = totalKeys.length-1;
-  }
-
-  if (event.key === 'ArrowLeft') {
-    if(dataDisplayIndex <= 0){
-      targetXOffset = -arrayLenth*4;
-      dataDisplayIndex = arrayLenth;
-    }else{
-      targetXOffset += 4;
-      dataDisplayIndex -= 1;
-    }
-
+  if(!disable_keyInput){
+    let arrayLenth = 0;
     if(senceSelector === 0){
-      dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+      arrayLenth = allCounterKey.length-1;
     }else if(senceSelector === 1){
-      dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+      arrayLenth = allTimerKey.length-1;
     }
 
-  } else if (event.key === 'ArrowRight') {
-    if(dataDisplayIndex >= arrayLenth){
-      targetXOffset = 0;
-      dataDisplayIndex = 0;
-    }else{
-      dataDisplayIndex += 1;
-      targetXOffset -= 4;
-    }
+    if (event.key === 'ArrowLeft') {
+      if(dataDisplayIndex <= 0){
+        targetXOffset = -arrayLenth*4;
+        dataDisplayIndex = arrayLenth;
+      }else{
+        targetXOffset += 4;
+        dataDisplayIndex -= 1;
+      }
 
-    if(senceSelector === 0){
-      dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
-    }else if(senceSelector === 1){
-      dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
-    }
+      if(senceSelector === 0){
+        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+      }else if(senceSelector === 1){
+        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+      }
 
-  } else if (event.key === 'ArrowUp') {
-    // numberTester += 1;
+    } else if (event.key === 'ArrowRight') {
+      if(dataDisplayIndex >= arrayLenth){
+        targetXOffset = 0;
+        dataDisplayIndex = 0;
+      }else{
+        dataDisplayIndex += 1;
+        targetXOffset -= 4;
+      }
+
+      if(senceSelector === 0){
+        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+      }else if(senceSelector === 1){
+        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+      }
+
+    } else if (event.key === 'ArrowUp') {
+      // numberTester += 1;
+    }
+    console.log(dataDisplayIndex);
   }
-  console.log(dataDisplayIndex);
 });
-
-export function targetOP(opInput){
-  if(opInput === 1){
-    targetXOffset += 4;
-  }else if (opInput === 2) {
-    targetXOffset -= 4;
-  }
-}
 
 function createTextPlane(text_lines, position, fontSize = 50, color = '#000000', backgroundColor = '#f7e7dd') {
   // 创建一个Canvas来绘制文本
@@ -550,7 +569,8 @@ function handleTimerData(allKeys, allValues){
   }
   
   allKeys.forEach((keys, index) => {
-    data2Unit(keys, timeCandys[index], unitGroup_Timer, cubeGroup_Timer ,index*4);
+    // data2Unit(keys, timeCandys[index], unitGroup_Timer, cubeGroup_Timer ,index*4);
+    data2Unit(keys, timeCandys[index], unitGroup_Timer, cubeGroup_Timer);
   });
 }
 
@@ -570,8 +590,8 @@ function handleCounterData(allKeys, allValues){
   }
   
   allKeys.forEach((keys, index) => {
-    data2Unit(keys, allValues[index], unitGroup_Counter, cubeGroup_Counter ,index*4);
-    // data2Unit(keys, allValues[index], unitGroup_Counter, cubeGroup_Counter , 0);
+    // data2Unit(keys, allValues[index], unitGroup_Counter, cubeGroup_Counter ,index*4);
+    data2Unit(keys, allValues[index], unitGroup_Counter, cubeGroup_Counter);
   });
 }
 
@@ -715,53 +735,28 @@ function changeData(){
     senceSelector = 0;
     changeDispalyButton.innerHTML = 'Go to Timer';
   }
+
   if(data_is_loaded){
-    if(senceSelector === 0){
-      dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
-      dataDisplayText.style.color = 'rgb(195, 195, 210)';
-    }else if(senceSelector === 1){
-      dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
-      dataDisplayText.style.color = 'rgb(195, 195, 210)';
+    if(!circularToggle.checked){
+      if(senceSelector === 0){
+        if(dataDisplayIndex > allCounterKey.length-1){
+          dataDisplayIndex = allCounterKey.length-1;
+          targetXOffset = (allCounterKey.length-1)*-4;
+          console.log('nonono');
+        }
+        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+        dataDisplayText.style.color = 'rgb(195, 195, 210)';
+      }else if(senceSelector === 1){
+        if(dataDisplayIndex > allTimerKey.length-1){
+          dataDisplayIndex = allTimerKey.length-1;
+          targetXOffset = (allTimerKey.length-1)*-4;
+          console.log('nonono');
+        }
+        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+        dataDisplayText.style.color = 'rgb(195, 195, 210)';
+      }
     }
   }
-}
-
-function time2Score(times) {
-
-  const numValues = times.length; // 输入数组的长度
-  let maxScore = 0; // 用于存储最大得分
-  let totalTime = 0; // 总计时间
-  let tempScore = new Array(numValues).fill(0); // 临时存储未归一化的得分
-  let normalizedScore = new Array(numValues).fill(0); // 最终归一化的得分
-
-  const minTime = 60000.0; // 最小时间（10小时）
-  const maxTime = 180000000.0; // 最大时间（50小时）
-  let coefficient = 0; // 用于归一化计算的系数
-
-  // 计算总时间
-  totalTime = times.reduce((sum, time) => sum + time, 0);
-
-  // 计算每个时间的临时得分（基于比例）
-  for (let i = 0; i < numValues; i++) {
-      tempScore[i] = (times[i] / totalTime) * times[i];
-  }
-
-  // 找到最大得分
-  maxScore = Math.max(...times);
-
-  // 根据总时间计算系数（用于得分调整）
-  coefficient = 1.0 + ((totalTime - minTime) / (maxTime - minTime)) * 19;
-
-  console.log("Max Score:", maxScore);
-  console.log("Coefficient:", coefficient);
-
-  // 将得分归一化到0-5的范围
-  for (let i = 0; i < numValues; i++) {
-      normalizedScore[i] = Math.round((tempScore[i] / maxScore) * coefficient);
-      console.log(`Time: ${times[i]}, Temp Score: ${tempScore[i]}, Normalized Score: ${normalizedScore[i]}`);
-  }
-
-  return normalizedScore;
 }
 
 function mili2Hour(miliseconds){
@@ -837,7 +832,6 @@ function positionMeshesOnCircle(meshArray) {
   }
 }
 
-// 辅助函数：获取每个组的每一行方块数量
 function getCubesPerRow(numCubes) {
   let rows = [];
   let row = 1;
@@ -869,4 +863,162 @@ function makeDisplayArray(allKeys, allValues, valueMod = 1, endUnit = ''){
     outputArray.push(unitArray);
   });
   return outputArray;
+}
+
+function runTime2Duration(allValue) {
+  const result = allValue.map((timer, index, array) => {
+      const newTimer = [...timer];
+      if (index === 0) {
+          return newTimer;
+      }
+      newTimer[newTimer.length - 1] = timer[timer.length - 1] - array[index - 1][array[index - 1].length - 1];
+      return newTimer;
+  });
+  return result;
+}
+
+function switchArrangeMod(){
+  if(data_is_loaded){
+    expErrorMessage.innerHTML = '';
+    if(circularToggle.checked){
+      circularText.style.color = 'rgb(66, 66, 68)';
+      dataDisplayText.innerHTML = ['- : -', '- : -', '- : -'].join('<br>')
+
+      disable_keyInput = true;
+      moveSpeed = 1;
+      if(senceSelector === 0){
+        BIGGroup_Counter.position.x = -4*dataDisplayIndex;
+      }else if(senceSelector === 1){
+        BIGGroup_Timer.position.x = -4*dataDisplayIndex;
+      }
+      targetXOffset = 0;
+      dataDisplayIndex = 0;
+
+      unitGroup_Counter.forEach(Counter => {
+        resetToWorldOrigin(Counter);
+      });
+      unitGroup_Timer.forEach(Timer =>{
+        resetToWorldOrigin(Timer);
+      })
+
+      setTimeout(() => {
+        positionMeshesOnCircle(unitGroup_Counter);
+        positionMeshesOnCircle(unitGroup_Timer);
+      }, 10)
+
+    }else{
+      circularText.style.color = 'rgb(195, 195, 210)';
+
+      if(senceSelector === 0){
+        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+        dataDisplayText.style.color = 'rgb(195, 195, 210)';
+      }else if(senceSelector === 1){
+        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+        dataDisplayText.style.color = 'rgb(195, 195, 210)';
+      }
+      
+      moveSpeed = 0.05;
+      disable_keyInput = false;
+      unitGroup_Counter.forEach((Counter, index) => {
+        resetToWorldOrigin(Counter);
+        Counter.position.set(index*4, 0, 0);
+      });
+      unitGroup_Timer.forEach((Timer, index) =>{
+        resetToWorldOrigin(Timer);
+        Timer.position.set(index*4, 0, 0);
+      })
+
+    }
+  }else{
+    circularToggle.checked = false;
+    expErrorMessage.innerHTML = 'Load data first';
+  }
+}
+
+function resetToWorldOrigin(object) {
+  if (!object || !(object instanceof THREE.Object3D)) {
+      console.error("Invalid object. Please provide a valid THREE.Object3D instance.");
+      return;
+  }
+
+  // Step 1: Calculate the object's world position and rotation
+  const worldPosition = new THREE.Vector3();
+  const worldQuaternion = new THREE.Quaternion();
+  
+  object.getWorldPosition(worldPosition); // Get current world position
+  object.getWorldQuaternion(worldQuaternion); // Get current world rotation (quaternion)
+  
+  // Step 2: Calculate the offset to bring the object to the origin
+  const parentWorldPosition = new THREE.Vector3();
+  const parentWorldQuaternion = new THREE.Quaternion();
+  
+  if (object.parent) {
+      // Get parent world position and rotation
+      object.parent.getWorldPosition(parentWorldPosition);
+      object.parent.getWorldQuaternion(parentWorldQuaternion);
+  }
+
+  // Offset the position relative to the parent
+  const localPositionOffset = new THREE.Vector3().subVectors(
+      new THREE.Vector3(0, 0, 0),
+      parentWorldPosition
+  );
+
+  // Offset the rotation relative to the parent
+  const localRotationOffset = new THREE.Quaternion().invert(parentWorldQuaternion);
+
+  // Step 3: Apply the offset to the object
+  object.position.copy(localPositionOffset); // Set the local position to bring it to world origin
+  object.quaternion.copy(localRotationOffset); // Set the local rotation to align with world axes
+
+  // Ensure the object matrix is updated
+  object.updateMatrixWorld(true);
+}
+
+function diviceInputUpdate(reciveIndex, value){
+  if(reciveIndexCount < reciveIndex){
+    reciveIndexCount = reciveIndex;
+    
+    let arrayLenth = 0;
+    if(senceSelector === 0){
+      arrayLenth = allCounterKey.length-1;
+    }else if(senceSelector === 1){
+      arrayLenth = allTimerKey.length-1;
+    }
+
+    if (value === 3 && !disable_keyInput) {
+      if(dataDisplayIndex <= 0){
+        targetXOffset = -arrayLenth*4;
+        dataDisplayIndex = arrayLenth;
+      }else{
+        targetXOffset += 4;
+        dataDisplayIndex -= 1;
+      }
+
+      if(senceSelector === 0){
+        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+      }else if(senceSelector === 1){
+        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+      }
+
+    } else if (value === 1 && !disable_keyInput) {
+      if(dataDisplayIndex >= arrayLenth){
+        targetXOffset = 0;
+        dataDisplayIndex = 0;
+      }else{
+        dataDisplayIndex += 1;
+        targetXOffset -= 4;
+      }
+
+      if(senceSelector === 0){
+        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+      }else if(senceSelector === 1){
+        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+      }
+
+    } else if (value === 2) {
+      changeData();
+    }
+    console.log(reciveIndex, value, dataDisplayIndex);
+  }
 }

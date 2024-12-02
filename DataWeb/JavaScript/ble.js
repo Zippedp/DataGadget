@@ -14,7 +14,6 @@ const submitButton = document.getElementById('submitButton');
 const deviceName = 'DataGadget';
 const bleService = '19b10000-e8f2-537e-4f6c-d104768a1214';
 const TIMER_CUSTOM_NAME_CHARACTERISTIC_UUID = '19b10001-e8f2-537e-4f6c-d104768a1214';
-const ledCharacteristic = '19b10002-e8f2-537e-4f6c-d104768a1214';
 const fileCharacteristic = '19b10003-e8f2-537e-4f6c-d104768a1214';
 const INPUT_CHARACTERISTIC_UUID = '19b10004-e8f2-537e-4f6c-d104768a1214';
 
@@ -31,6 +30,8 @@ let nameChangeTarget = 1;
 let lastFileTime = Date.now();
 let is_first_DataPack = true;
 let timer = null;
+export let recivedValue = 0;
+export let inputRecivedIndex = 0;
 
 // Total keys and values arrays
 export let data_is_loaded = false;
@@ -85,24 +86,59 @@ async function connectToDevice() {
 function handleSubmit(event){
     event.preventDefault();
 
-    const errorMessage = document.getElementById('errorMessage');
-    errorMessage.style.display = 'none';
+    const errorMessage = document.getElementById("errorMessage");
+    errorMessage.style.display = "none";
+    errorMessage.textContent = "";
 
-    const inputs = ['input1', 'input2', 'input3'].map(id => document.getElementById(id));
+    const inputs = ["input1", "input2", "input3"].map(id => document.getElementById(id));
     let isValid = true;
 
-    inputs.forEach(input => {
-        const error = validateInput(input);
-        if (error) {
+    // Check if inputs are empty or invalid
+    for (let i = 0; i < inputs.length; i++) {
+        const input = inputs[i];
+        const value = input.value.trim();
+        if (!value) {
             isValid = false;
-            errorMessage.textContent = error;
-            errorMessage.style.display = 'block';
+            errorMessage.textContent = "Inputs cannot be empty.";
+            errorMessage.style.display = "block";
+            break;
         }
-    });
+        if (!restrictionRegex.test(value)) {
+            isValid = false;
+            errorMessage.textContent = 'Name cannot contain the symbol ":" or uncommon characters.';
+            errorMessage.style.display = "block";
+            break;
+        }
+        if (value.length > 20) {
+            isValid = false;
+            errorMessage.textContent = "Name length cannot exceed 20 characters.";
+            errorMessage.style.display = "block";
+            break;
+        }
+    }
+
+    // Check if inputs are unique
+    if (isValid) {
+        const values = inputs.map(input => input.value.trim());
+        const uniqueValues = new Set(values);
+        if (uniqueValues.size < inputs.length) {
+            isValid = false;
+            errorMessage.textContent = "All inputs must be unique.";
+            errorMessage.style.display = "block";
+        }
+    }
 
     if (isValid) {
+        // Proceed to submit the data
         submitBLE();
     }
+}
+
+function clearInputs(){
+    const inputs = ["input1", "input2", "input3"].map(id => document.getElementById(id));
+    inputs.forEach(input => {
+        input.value = "";
+    });
 }
 
 function submitBLE() {
@@ -121,14 +157,14 @@ function submitBLE() {
             .then(() => {
                 console.log("sent to Arduino:", stringadd);
                 console.log("sent to Arduino:", data);
-                alert("NiceBro");
+                alert("Name Changed");
             })
             .catch(error => {
                 console.error("sent failed:", error);
-                alert("BedBro");
+                alert("Some thing Gos Wrong...");
             });
     } else {
-        alert("BLE not connected");
+        alert("Gadget not connected");
     }
 }
 
@@ -137,13 +173,12 @@ function disconnectDevice() {
     if (bleServer && bleServer.connected) {
         bleServer.disconnect();
         is_first_DataPack = true;
-        console.log("BLE device disconnected.");
+        alert("Gadget disconnected");
         bleStateContainer.innerHTML = "Disconnected";
     } else {
-        alert("No BLE device connected to disconnect.");
+        alert("No Gadget to disconnect");
     }
 }
-
 
 // Handle Incoming File Data (New Functionality)
 function handleFileData(event) {
@@ -153,6 +188,9 @@ function handleFileData(event) {
     const value = new TextDecoder().decode(event.target.value);
     const currentTime = Date.now();
     console.log("Received Data:");
+    bleStateContainer.innerHTML = "Receiving Data..."
+    bleStateContainer.style.color = "transparent";
+    bleStateContainer.className = 'rainbow-text';
 
     if(is_first_DataPack){
         lastFileTime = currentTime;
@@ -211,6 +249,7 @@ function handleFileData(event) {
 
 radioButtons.forEach(radio => {
     radio.addEventListener('change', () => {
+        clearInputs();
         radioButtons.forEach(btn => {
             if (btn.checked) {
                 nameChangeTarget = btn.value;
@@ -234,32 +273,23 @@ function validateInput(input) {
 }
 
 function diviceInput(event){
+    inputRecivedIndex += 1;
     const value = event.target.value;
     const dataView = new DataView(value.buffer);
-    const intValue = dataView.getInt32(0, true);
-    // targetOP(intValue);
-    console.log(intValue);
+    recivedValue = dataView.getInt32(0, true);
+    console.log(recivedValue);
 }
 
-window.addEventListener('keydown', (event) => {
-    // if (event.key === 'ArrowDown') {
-    //     data_is_loaded = true;
-    //     console.log("pressed: ", data_is_loaded);
-    // }
-  });
-
 async function triggerDataLoaded() {
-    // 如果已经有定时器在运行，清除它
     if (timer) {
       clearTimeout(timer);
     }
   
-    // 设置一个新的定时器
     timer = setTimeout(() => {
         totalValues_2num = totalValues.map(row => row.map(Number));
         totalValues_1_2num = totalValues_1.map(row => row.map(Number));
-        data_is_loaded = true; // 设置全局变量
+        data_is_loaded = true; 
         console.log("data_is_loaded has been set to true");
-        timer = null; // 清除定时器引用
+        timer = null; 
     }, 1000);
-  }
+}
