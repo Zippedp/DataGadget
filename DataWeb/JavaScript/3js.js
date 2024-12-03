@@ -1,9 +1,35 @@
+/*
+  Acknowledgment: 
+    3js.js is kick started by Three.js Crash Course by developedbyed
+    Details at https://www.youtube.com/watch?v=_OwJV2xL8M8&t=1641s
+
+    Some of the function is adapted frome 2018 Basic examples from /Basisbeispiele von
+    Detials at https://hofk.de/main/discourse.threejs/2018/index2018.html
+
+  LLMDiscloser:
+    Code created using generative tools will be clearly marked in comments.
+
+  ToDoList:
+    + Uniform naming with Arduino, ble.js and itself.
+    + add playground mode for anyone to put absurd number in to the visualizer to play with
+    + add optional pillars for emphasis the amount of jars
+    + rewrite jar size randanmize part to make it switchable
+    + add color local storage for constant color for each lable
+    + figer out a way to handle new lable color once local storage added
+    + try adding a wireframe ground
+    + add cam path for circle arrangement
+    + add post processing glow effect
+    + add post processing depth of field effect
+    + add a emulator for fully online exprenece
+*/
+
 import * as THREE from 'three';
 import { createNoise3D } from 'simplex-noise';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {totalKeys, totalValues_2num, totalKeys_1, totalValues_1_2num, data_is_loaded, recivedValue, inputRecivedIndex} from '../JavaScript/ble.js'
 
+// get doc elements
 const canvas = document.querySelector('.webgl');
 const changeDispalyButton = document.getElementById('changeDispalyButton');
 const dataDisplayText = document.getElementById('dataDisplay');
@@ -12,24 +38,59 @@ const circularToggle = document.getElementById('expCircularToggle');
 const circularText = document.getElementById('expCircularText');
 const expErrorMessage = document.getElementById('expErrorMessage');
 
+// marking data transfered & selected data type
+let need_init = true;
+let senceSelector = 0;
 // var for movement smooth
 let targetXOffset = 0;
 let moveSpeed = 0.05;
-let cubeIndex = 0;
-let senceSelector = 0;
-let dataDisplayIndex = 0;
-let arrangeRadius = 0;
-let is_quickFixSkip = false;
-let disable_keyInput = false;
+// for handle divice inpute
 let reciveIndexCount = 0;
+let disable_keyInput = false;
+// for color gen function
+let colorPalette = [];
+let unitIndexArray = [];
+// for jar & copys
+let jar;
+let jar_for_Timer;
+let jarIndexInArray = 0;
+let modleFilePath = '../Res/test_2.gltf';
+// array for mid data display
+let dataDisplayIndex = 0;
+let displayText_timer = [];
+let displayText_counter = [];
+// array for store imported data frome ble.js
+let allTimerKey = [];
+let allTimerValue = [];
+let allCounterKey = [];
+let allCounterValue = [];
+let uniqueKeys = [];
+// for future development
+let arrangeRadius = 0;
+let cheatCode = false;
+let is_quickFixSkip = false;
 
-// create scene
+// all cubegroups, for changing rotation & pos indivisually
+let cubeIndexInArray = 0;
+const cubeGroup_Counter = [];
+const cubeGroup_Timer = [];
+// one clear as a unit, for moving unit indivisually
+const unitGroup_Counter = [];
+const unitGroup_Timer = [];
+// big group for moving everything together
+const BIGGroup_Timer = new THREE.Group();
+const BIGGroup_Counter = new THREE.Group();
+
+// creat new 3d noise
+const noise3D = createNoise3D();
+// load GLTF model
+const loader = new GLTFLoader();
+
+// create scenes
 const scene = new THREE.Scene();
 const scene_Timer = new THREE.Scene();
 // scene.fog = new THREE.Fog( 0x3f7b9d, 1, 20 );
 
-changeDispalyButton.addEventListener('click', changeData);
-circularToggle.addEventListener('change', switchArrangeMod);
 // create renderer
 // const renderer = new THREE.WebGLRenderer({ canvas , alpha: true });
 const renderer = new THREE.WebGLRenderer({ canvas });
@@ -65,33 +126,7 @@ cameraLight.castShadow = true;
 scene_Timer.add(ambientLight_1);
 scene_Timer.add(cameraLight_1);
 
-// load GLTF model
-const loader = new GLTFLoader();
-const cubeGroup_Counter = [];
-const cubeGroup_Timer = [];
-const unitGroup_Counter = [];
-const unitGroup_Timer = [];
-const BIGGroup_Timer = new THREE.Group();
-const BIGGroup_Counter = new THREE.Group();
-let colorPalette = [];
-let uniqueKeys = [];
-let unitIndexArray = [];
-let need_init = true;
-let jarIndex_test = 0;
-let jar;
-let jar_for_Timer;
-
-let displayText_timer = [];
-let displayText_counter = [];
-
-
-const noise3D = createNoise3D();
-
-let allTimerKey = [];
-let allTimerValue = [];
-let allCounterKey = [];
-let allCounterValue = [];
-
+// for testing
 const allKeys_test = [
   ['testA', 'testB', 'testC','runtime'],
   ['A', 'B', 'C','runtime'],
@@ -117,14 +152,114 @@ const allTimers_test = [
   [12000000, 2500000, 10001, 20600000]
 ];
 
+// loop
 animate();
 
-// Animation function
-function animate() {
-  requestAnimationFrame(animate); // Loop the animation function
+// add EventListener
+changeDispalyButton.addEventListener('click', changeData);
+circularToggle.addEventListener('change', switchArrangeMod);
 
+// update renderer on window resize
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+});
+
+// keydown events for biggroup movments
+window.addEventListener('keydown', (event) => {
+  if(!disable_keyInput){ // disable if in Circular mode
+    // swith arrayLenth based on sence selected
+    let arrayLenth = 0;
+    if(senceSelector === 0){
+      arrayLenth = allCounterKey.length-1;
+    }else if(senceSelector === 1){
+      arrayLenth = allTimerKey.length-1;
+    }
+
+    if (event.key === 'ArrowLeft') { // left shift 4
+      if(dataDisplayIndex <= 0){
+        targetXOffset = -arrayLenth*4;
+        dataDisplayIndex = arrayLenth;
+      }else{
+        targetXOffset += 4;
+        dataDisplayIndex -= 1;
+      }
+
+      if(senceSelector === 0){
+        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+      }else if(senceSelector === 1){
+        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+      }
+
+    } else if (event.key === 'ArrowRight') { // right shift 4
+      if(dataDisplayIndex >= arrayLenth){
+        targetXOffset = 0;
+        dataDisplayIndex = 0;
+      }else{
+        dataDisplayIndex += 1;
+        targetXOffset -= 4;
+      }
+
+      if(senceSelector === 0){
+        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+      }else if(senceSelector === 1){
+        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+      }
+
+    } else if (event.key === 'ArrowUp') { // enable cheatCode & load sudo data for testing
+      // cheatCode = true;
+      // allTimerKey = allKeys_test;
+      // allTimerValue = allTimers_test;
+      // allCounterKey = allKeys_test;
+      // allCounterValue = allValues_test;
+    }
+    console.log(dataDisplayIndex);
+  }
+});
+
+// for load jar modle
+loader.load(
+  // file path
+  modleFilePath, 
+  // loaded
+  function (gltf) {
+    jar = gltf.scene;
+    // replace loaded modle material code is partly assisted by ChatGPT
+    jar.traverse((child) => {
+      if (child.isMesh) {
+        const glassToonMaterial = new THREE.MeshToonMaterial({
+          color: 0xb1d8ec,
+          transparent: true,
+          opacity: 0.2,
+        });
+        child.receiveShadow = true;
+        child.material = glassToonMaterial;
+      }
+    });
+    jar_for_Timer = jar.clone();
+    scene.add(jar);
+    scene_Timer.add(jar_for_Timer);
+  },
+  // on load
+  function ( xhr ) {
+		console.log( ( xhr.loaded / xhr.total * 100 ) + '% loaded' );
+	},
+  // error massage
+  function (error) {
+    console.error(error);
+  }
+);
+
+// animation function
+function animate() {
+  requestAnimationFrame(animate); // loop animation
+  diviceInputUpdate(inputRecivedIndex, recivedValue); // update input from divice
+  controls.update(); // update OrbitControls
+  
   const time = performance.now();
-  if(data_is_loaded && need_init){
+  // if ble transfer finished start scene init
+  if(data_is_loaded && need_init || cheatCode && need_init){
     bleStateContainer.style.color = '#24af37';
     bleStateContainer.className = '';
     bleStateContainer.innerHTML = "Done";
@@ -132,14 +267,19 @@ function animate() {
     scene.remove(jar);
     scene_Timer.remove(jar_for_Timer);
 
-    allTimerKey = totalKeys;
-    allTimerValue =  runTime2Duration(totalValues_2num);
-    allCounterKey = totalKeys_1;
-    allCounterValue = runTime2Duration(totalValues_1_2num);
-
-    displayText_timer = makeDisplayArray(allTimerKey,  allTimerValue, 3600000, 'h');
+    // for sikp load real data if needed
+    if(!cheatCode){
+      allTimerKey = totalKeys;
+      allTimerValue =  runTime2Duration(totalValues_2num);
+      allCounterKey = totalKeys_1;
+      allCounterValue = runTime2Duration(totalValues_1_2num);
+    }
+    
+    // creat arr for display on the mid
+    displayText_timer = makeDisplayArray(allTimerKey,  allTimerValue, 3600000, ' hrs.');
     displayText_counter = makeDisplayArray(allCounterKey,  allCounterValue);
 
+    // linear arrangement mid text update
     if(!circularToggle.checked){
       if(senceSelector === 0){
         targetXOffset = -(allCounterKey.length-1)*4;
@@ -154,12 +294,14 @@ function animate() {
       }
     }
 
+    // process & creat jars for Timer
     handleTimerData(allTimerKey, allTimerValue);
     console.log(allTimerKey, allTimerValue);
-
+    // process & creat jars for Counters
     handleCounterData(allCounterKey, allCounterValue);
     console.log(allCounterKey, allCounterValue);
 
+    // linear arrangement setup
     unitGroup_Counter.forEach((Counter, index) => {
       Counter.position.set(index*4, 0, 0);
     });
@@ -167,6 +309,7 @@ function animate() {
       Timer.position.set(index*4, 0, 0);
     })
 
+    // add everything to big group
     unitGroup_Timer.forEach(unit => {
       BIGGroup_Timer.add(unit);
     });
@@ -179,20 +322,12 @@ function animate() {
     scene.add(BIGGroup_Counter);
   }
 
-  diviceInputUpdate(inputRecivedIndex, recivedValue);
-  controls.update();
-
-  // if(!is_quickFixSkip){ 
-  //   moveSpeed = 0.05;
-  // } 
-  // is_quickFixSkip = false;
-
-  // Smoothly move all meshes to the target position
+  // smoothly all meshes move to the target position
   BIGGroup_Timer.position.x += (targetXOffset - BIGGroup_Timer.position.x) * moveSpeed;
   BIGGroup_Counter.position.x += (targetXOffset - BIGGroup_Counter.position.x) * moveSpeed;
   
-
-  if(senceSelector === 0){
+  // cube animation
+  if(senceSelector === 0){ // for Counter
     let clearGroupIndex = 0;
     let indexTemp = 0;
 
@@ -208,7 +343,7 @@ function animate() {
     });
     renderer.render(scene, camera);
 
-  }else if(senceSelector ===1){
+  }else if(senceSelector ===1){ // for Timer
     let clearGroupIndex = 0;
     let indexTemp = 0;
 
@@ -226,34 +361,250 @@ function animate() {
   }
 }
 
-loader.load(
-  '../Res/test_2.gltf',
-  function (gltf) {
-    jar = gltf.scene;
-    jar.traverse((child) => {
-      if (child.isMesh) {
-        // Create and apply MeshToonMaterial material
-        const glassToonMaterial = new THREE.MeshToonMaterial({
-          color: 0xb1d8ec, // Base color (light blue)
-          transparent: true, // Allow transparency
-          opacity: 0.2, // Set opacity
-        });
-        child.receiveShadow = true;
-        child.material = glassToonMaterial; // Replace the material of the child object
-      }
-    });
-    jar_for_Timer = jar.clone();
-    scene.add(jar);
-    scene_Timer.add(jar_for_Timer);
-  },
-  function ( xhr ) {
-		console.log( ( xhr.loaded / xhr.total * 100 ) + '% loaded' );
-	},
-  function (error) {
-    console.error(error);
-  }
-);
+// chang between Linear and circular arrange
+function switchArrangeMod(){
+  if(data_is_loaded || cheatCode){
+    expErrorMessage.innerHTML = '';
+    if(circularToggle.checked){
+      circularText.style.color = 'rgb(66, 66, 68)';
+      dataDisplayText.innerHTML = ['- : -', '- : -', '- : -'].join('<br>')
 
+      disable_keyInput = true;
+      moveSpeed = 1;
+      if(senceSelector === 0){
+        BIGGroup_Counter.position.x = -4*dataDisplayIndex;
+      }else if(senceSelector === 1){
+        BIGGroup_Timer.position.x = -4*dataDisplayIndex;
+      }
+      targetXOffset = 0;
+      dataDisplayIndex = 0;
+
+      unitGroup_Counter.forEach(Counter => {
+        resetToWorldOrigin(Counter);
+      });
+      unitGroup_Timer.forEach(Timer =>{
+        resetToWorldOrigin(Timer);
+      })
+
+      setTimeout(() => {
+        positionMeshesOnCircle(unitGroup_Counter);
+        positionMeshesOnCircle(unitGroup_Timer);
+      }, 10)
+
+    }else{
+      circularText.style.color = 'rgb(195, 195, 210)';
+
+      if(senceSelector === 0){
+        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+        dataDisplayText.style.color = 'rgb(195, 195, 210)';
+      }else if(senceSelector === 1){
+        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+        dataDisplayText.style.color = 'rgb(195, 195, 210)';
+      }
+      
+      moveSpeed = 0.05;
+      disable_keyInput = false;
+      unitGroup_Counter.forEach((Counter, index) => {
+        resetToWorldOrigin(Counter);
+        Counter.position.set(index*4, 0, 0);
+      });
+      unitGroup_Timer.forEach((Timer, index) =>{
+        resetToWorldOrigin(Timer);
+        Timer.position.set(index*4, 0, 0);
+      })
+
+    }
+  }else{
+    circularToggle.checked = false;
+    expErrorMessage.innerHTML = 'Load data first';
+  }
+}
+
+// change displayed sence
+function changeData(){
+  if(senceSelector === 0){
+    senceSelector = 1;
+    changeDispalyButton.innerHTML = 'Go to Counter';
+  }else if(senceSelector === 1){
+    senceSelector = 0;
+    changeDispalyButton.innerHTML = 'Go to Timer';
+  }
+
+  if(data_is_loaded){
+    if(!circularToggle.checked){
+      if(senceSelector === 0){
+        if(dataDisplayIndex > allCounterKey.length-1){
+          dataDisplayIndex = allCounterKey.length-1;
+          targetXOffset = (allCounterKey.length-1)*-4;
+          console.log('nonono');
+        }
+        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+        dataDisplayText.style.color = 'rgb(195, 195, 210)';
+      }else if(senceSelector === 1){
+        if(dataDisplayIndex > allTimerKey.length-1){
+          dataDisplayIndex = allTimerKey.length-1;
+          targetXOffset = (allTimerKey.length-1)*-4;
+          console.log('nonono');
+        }
+        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+        dataDisplayText.style.color = 'rgb(195, 195, 210)';
+      }
+    }
+  }
+}
+
+// update input based on import values 
+function diviceInputUpdate(reciveIndex, value){
+  if(reciveIndexCount < reciveIndex){
+    reciveIndexCount = reciveIndex;
+    
+    let arrayLenth = 0;
+    if(senceSelector === 0){
+      arrayLenth = allCounterKey.length-1;
+    }else if(senceSelector === 1){
+      arrayLenth = allTimerKey.length-1;
+    }
+
+    if (value === 3 && !disable_keyInput) {
+      if(dataDisplayIndex <= 0){
+        targetXOffset = -arrayLenth*4;
+        dataDisplayIndex = arrayLenth;
+      }else{
+        targetXOffset += 4;
+        dataDisplayIndex -= 1;
+      }
+
+      if(senceSelector === 0){
+        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+      }else if(senceSelector === 1){
+        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+      }
+
+    } else if (value === 1 && !disable_keyInput) {
+      if(dataDisplayIndex >= arrayLenth){
+        targetXOffset = 0;
+        dataDisplayIndex = 0;
+      }else{
+        dataDisplayIndex += 1;
+        targetXOffset -= 4;
+      }
+
+      if(senceSelector === 0){
+        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
+      }else if(senceSelector === 1){
+        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
+      }
+
+    } else if (value === 2) {
+      changeData();
+    }
+    console.log(reciveIndex, value, dataDisplayIndex);
+  }
+}
+
+// process data & handle mash creation ofr timer
+function handleTimerData(allKeys, allValues){
+  let timeCandys = convertTimersToHours(allValues, mili2Hour);
+  uniqueKeys = [...new Set(allKeys.flat())];
+  colorPalette = generateColorPalette(uniqueKeys.length-1);
+  let numJars = 0;
+  jarIndexInArray = 0;
+
+  timeCandys.forEach((values, index) => {
+    const array20 = splitArray(values);
+    numJars += array20.length;
+  });
+
+  for(let i=0; i<numJars; i++){
+    cubeGroup_Timer.push(new THREE.Group);
+  }
+  
+  allKeys.forEach((keys, index) => {
+    // data2Unit(keys, timeCandys[index], unitGroup_Timer, cubeGroup_Timer ,index*4);
+    data2Unit(keys, timeCandys[index], unitGroup_Timer, cubeGroup_Timer);
+  });
+}
+
+// process data & handle mash creation ofr counter
+function handleCounterData(allKeys, allValues){
+  uniqueKeys = [...new Set(allKeys.flat())];
+  colorPalette = generateColorPalette(uniqueKeys.length-1);
+  let numJars = 0;
+  jarIndexInArray = 0;
+
+  allValues.forEach((values, index) => {
+    const array20 = splitArray(values);
+    numJars += array20.length;
+  });
+
+  for(let i=0; i<numJars; i++){
+    cubeGroup_Counter.push(new THREE.Group);
+  }
+  
+  allKeys.forEach((keys, index) => {
+    // data2Unit(keys, allValues[index], unitGroup_Counter, cubeGroup_Counter ,index*4);
+    data2Unit(keys, allValues[index], unitGroup_Counter, cubeGroup_Counter);
+  });
+}
+
+// add jars & cubes for one unit/clearGroup
+function data2Unit(keys, values, unitGroupContainer, contentGroupContainer, shiftX=0, shiftY=0, shiftZ=0){
+  const unitContainer = new THREE.Group();
+  const array20 = splitArray(values);
+  let numJarTemp = 0;
+  array20.forEach((value, index) => {
+    const { x, y, z } = getBowlingPosition(index);
+    data2jar(jarIndexInArray, keys, value, unitContainer, contentGroupContainer, shiftX+x, shiftY+y, shiftZ+z);
+    jarIndexInArray += 1;
+    numJarTemp += 1;
+  });
+  unitGroupContainer.push(unitContainer);
+  unitIndexArray.push(numJarTemp);
+  
+}
+
+// add jar & cubes
+function data2jar(jarIndex, keys, values, unitContainer, contentGroupContainer, centerX = 0, centerY = 0, centerZ = 0){
+  // let sizeTemXZ = 1+(1-Math.random())*0.2;
+  // let sizeTempY = 1+(1-Math.random())*0.5;
+  let sizeTemXZ = 0;
+  let sizeTempY = 0;
+
+  contentGroupContainer[jarIndex].position.set(centerX, centerY, centerZ);
+  // console.log(cubeGroup[jarIndex].position);
+  const textArr = [];
+  keys.forEach((item, index) => {
+    const paletteIndex = uniqueKeys.indexOf(item);
+    if(index != 3){
+      for(let i=0; i<values[index]; i++){
+        createCubeFrame(cubeIndexInArray, 0, 0, 0, contentGroupContainer[jarIndex], colorPalette[paletteIndex]);
+        cubeIndexInArray += 1;
+      }
+    }
+    if(index === 3){
+      textArr.push(item + ': ' + Math.floor((values[index]/(60*60))*10)/10 + ' h');
+    }else{
+      textArr.push(item + ': ' + values[index]);
+    }
+  });
+
+  cubeIndexInArray = 0;
+  // const textLable = createTextPlane(textArr, { x: centerX, y: centerY-0.4, z: centerZ+1+(sizeTemXZ-1) });
+  const textLable = createTextPlane(textArr, { x: centerX, y: centerY-0.4, z: centerZ+1 });
+  const jarrr = jar.clone();
+
+  
+  // jarrr.scale.set(sizeTemXZ, sizeTempY, sizeTemXZ);
+
+  // jarrr.position.set(centerX, centerY+(sizeTempY-1), centerZ);
+  jarrr.position.set(centerX, centerY, centerZ);
+  unitContainer.add(jarrr);
+  unitContainer.add(contentGroupContainer[jarIndex]);
+  unitContainer.add(textLable);
+  // unitOne.rotation.y = -0.55;
+}
+
+// create facetedBox from 2018 Basic examples. Adaptation to new version of 3js lib is made using ChatGPT.
 function facetedBox(w, h, d, f, isWireframed) { // @author prisoner849
 
   let hw = w * 0.5, hh = h * 0.5, hd = d * 0.5;
@@ -352,6 +703,7 @@ function facetedBox(w, h, d, f, isWireframed) { // @author prisoner849
   return geom;
 }
 
+// create cube on given position by index. 
 function createCubeFrame(positionIndex, centerX, centerY, centerZ, targetGroup, inputcolor=0xff4294) {
   const cubeSize = 0.3;
   const gap = 0.02;
@@ -389,129 +741,63 @@ function createCubeFrame(positionIndex, centerX, centerY, centerZ, targetGroup, 
   targetGroup.add(cubeChamfered);
 }
 
-// update renderer on window resize
-window.addEventListener('resize', () => {
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-});
-
-// keydown events for 3js cam movments
-window.addEventListener('keydown', (event) => {
-  if(!disable_keyInput){
-    let arrayLenth = 0;
-    if(senceSelector === 0){
-      arrayLenth = allCounterKey.length-1;
-    }else if(senceSelector === 1){
-      arrayLenth = allTimerKey.length-1;
-    }
-
-    if (event.key === 'ArrowLeft') {
-      if(dataDisplayIndex <= 0){
-        targetXOffset = -arrayLenth*4;
-        dataDisplayIndex = arrayLenth;
-      }else{
-        targetXOffset += 4;
-        dataDisplayIndex -= 1;
-      }
-
-      if(senceSelector === 0){
-        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
-      }else if(senceSelector === 1){
-        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
-      }
-
-    } else if (event.key === 'ArrowRight') {
-      if(dataDisplayIndex >= arrayLenth){
-        targetXOffset = 0;
-        dataDisplayIndex = 0;
-      }else{
-        dataDisplayIndex += 1;
-        targetXOffset -= 4;
-      }
-
-      if(senceSelector === 0){
-        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
-      }else if(senceSelector === 1){
-        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
-      }
-
-    } else if (event.key === 'ArrowUp') {
-      // numberTester += 1;
-    }
-    console.log(dataDisplayIndex);
-  }
-});
-
+// create lable for each jar. This part is mostly generated by ChatGPT.
 function createTextPlane(text_lines, position, fontSize = 50, color = '#000000', backgroundColor = '#f7e7dd') {
-  // 创建一个Canvas来绘制文本
+  // Create a Canvas to draw the text
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
 
-  // 设置Canvas的尺寸
+  // Set the size of the Canvas
   canvas.width = 512-128;
   canvas.height = 256;
 
-  // 设置背景颜色
+  // Set the background color
   context.fillStyle = backgroundColor;
   context.fillRect(0, 0, canvas.width, canvas.height);
 
-  // 设置文本样式
+  // Setting text styles
   context.font = `${fontSize}px Arial`;
   context.fillStyle = color;
   context.textAlign = 'left';
   context.textBaseline = 'middle';
 
-  // 绘制文本，起始位置在左侧
-  const padding = 20; // 添加一些内边距
+  // Draw text, starting on the left
+  const padding = 20; // Add some padding
   text_lines.forEach((line, index) => {
     context.fillText(line, padding, canvas.height / 4 - fontSize/2 + (fontSize+10)*index);
   });
 
-  // 创建纹理
+  // Creating Textures
   const texture = new THREE.CanvasTexture(canvas);
 
-  // 创建材质
+  // Creating Materials
   const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
   material.transparent = true;
 
-  // 创建平面几何体
+  // Creating Plane Geometry
   const geometry = new THREE.PlaneGeometry(0.75, 0.5);
 
-  // 创建Mesh
+  // Creating a Mesh
   const plane = new THREE.Mesh(geometry, material);
 
-  // 设置平面位置
+  // Set plane position
   plane.position.set(position.x, position.y, position.z);
 
   return plane;
 }
 
-function calculateMatchingColor(inputColor, colorA, colorB) {
-  const delta = calculateColorDelta(colorA, colorB); // 计算 RGB 差值
-  const inputRgb = hexToRgb(inputColor);
-
-  // 根据输入颜色和差值计算新颜色
-  const resultRgb = {
-    r: Math.max(0, Math.min(255, inputRgb.r + delta.r)),
-    g: Math.max(0, Math.min(255, inputRgb.g + delta.g)),
-    b: Math.max(0, Math.min(255, inputRgb.b + delta.b)),
-  };
-
-  return rgbToHex(resultRgb);
-}
-
+// Returns a given number of colors with the same spacing on the color wheel. This part is mostly generated by ChatGPT.
 function generateColorPalette(numColors = 3) {
-  // 随机生成一个基准色 (baseColor) 的 HSL 值
-  const baseHue = Math.floor(Math.random() * 360); // 色相 [0, 360)
-  const baseSaturation = 70; // 固定饱和度为 70%
-  const baseLightness = 50; // 固定亮度为 50%
+  // Randomly generate a baseColor HSL value
+  const baseHue = Math.floor(Math.random() * 360);
+  const baseSaturation = 70;
+  const baseLightness = 50;
   if(numColors === 3){
-    // 定义符合配色原理的色相偏移量
-    const offset1 = 70; // 第一个偏移角度（类比色）
-    const offset2 = 140; // 第二个偏移角度（互补色）
+    // Define the hue offset that complies with the color matching principle
+    const offset1 = 70;
+    const offset2 = 140; 
 
-    // 生成三种颜色
+    // Generate three colors
     const colors = [
     hslToRgbHex(baseHue, baseSaturation, baseLightness), 
     hslToRgbHex((baseHue + offset1) % 360, baseSaturation, baseLightness), 
@@ -521,12 +807,12 @@ function generateColorPalette(numColors = 3) {
     return colors;
 
   }else{
-    // 根据需要生成的颜色数量，动态计算色相偏移量
+    // Dynamically calculate the hue offset based on the number of colors that need to be generated
     const offsetStep = 360 / numColors;
 
-    // 生成指定数量的颜色
+    // Generates the specified number of colors
     const colors = Array.from({ length: numColors }, (_, i) => {
-    const hue = (baseHue + i * offsetStep) % 360; // 计算色相
+    const hue = (baseHue + i * offsetStep) % 360;
     return hslToRgbHex(hue, baseSaturation, baseLightness);
   });
 
@@ -535,6 +821,7 @@ function generateColorPalette(numColors = 3) {
   }
 }
 
+// Return the coordinates of the triangle arrangement according to index. This part is mostly generated by ChatGPT.
 function getBowlingPosition(index) {
   let coefficient = 1;
   let row = 0;
@@ -552,104 +839,21 @@ function getBowlingPosition(index) {
   return { x, y, z };
 }
 
-function handleTimerData(allKeys, allValues){
-  let timeCandys = convertTimersToHours(allValues, mili2Hour);
-  uniqueKeys = [...new Set(allKeys.flat())];
-  colorPalette = generateColorPalette(uniqueKeys.length-1);
-  let numJars = 0;
-  jarIndex_test = 0;
+// Auxiliary function for get fixed difference colors for base & Luminescence. This part is all generated by ChatGPT.
+function calculateMatchingColor(inputColor, colorA, colorB) {
+  const delta = calculateColorDelta(colorA, colorB);
+  const inputRgb = hexToRgb(inputColor);
 
-  timeCandys.forEach((values, index) => {
-    const array20 = splitArray(values);
-    numJars += array20.length;
-  });
+  const resultRgb = {
+    r: Math.max(0, Math.min(255, inputRgb.r + delta.r)),
+    g: Math.max(0, Math.min(255, inputRgb.g + delta.g)),
+    b: Math.max(0, Math.min(255, inputRgb.b + delta.b)),
+  };
 
-  for(let i=0; i<numJars; i++){
-    cubeGroup_Timer.push(new THREE.Group);
-  }
-  
-  allKeys.forEach((keys, index) => {
-    // data2Unit(keys, timeCandys[index], unitGroup_Timer, cubeGroup_Timer ,index*4);
-    data2Unit(keys, timeCandys[index], unitGroup_Timer, cubeGroup_Timer);
-  });
+  return rgbToHex(resultRgb);
 }
 
-function handleCounterData(allKeys, allValues){
-  uniqueKeys = [...new Set(allKeys.flat())];
-  colorPalette = generateColorPalette(uniqueKeys.length-1);
-  let numJars = 0;
-  jarIndex_test = 0;
-
-  allValues.forEach((values, index) => {
-    const array20 = splitArray(values);
-    numJars += array20.length;
-  });
-
-  for(let i=0; i<numJars; i++){
-    cubeGroup_Counter.push(new THREE.Group);
-  }
-  
-  allKeys.forEach((keys, index) => {
-    // data2Unit(keys, allValues[index], unitGroup_Counter, cubeGroup_Counter ,index*4);
-    data2Unit(keys, allValues[index], unitGroup_Counter, cubeGroup_Counter);
-  });
-}
-
-function data2Unit(keys, values, unitGroupContainer, contentGroupContainer, shiftX=0, shiftY=0, shiftZ=0){
-  const unitContainer = new THREE.Group();
-  const array20 = splitArray(values);
-  let numJarTemp = 0;
-  array20.forEach((value, index) => {
-    const { x, y, z } = getBowlingPosition(index);
-    data2jar(jarIndex_test, keys, value, unitContainer, contentGroupContainer, shiftX+x, shiftY+y, shiftZ+z);
-    jarIndex_test += 1;
-    numJarTemp += 1;
-  });
-  unitGroupContainer.push(unitContainer);
-  unitIndexArray.push(numJarTemp);
-  
-}
-
-function data2jar(jarIndex, keys, values, unitContainer, contentGroupContainer, centerX = 0, centerY = 0, centerZ = 0){
-  // let sizeTemXZ = 1+(1-Math.random())*0.2;
-  // let sizeTempY = 1+(1-Math.random())*0.5;
-  let sizeTemXZ = 0;
-  let sizeTempY = 0;
-
-  contentGroupContainer[jarIndex].position.set(centerX, centerY, centerZ);
-  // console.log(cubeGroup[jarIndex].position);
-  const textArr = [];
-  keys.forEach((item, index) => {
-    const paletteIndex = uniqueKeys.indexOf(item);
-    if(index != 3){
-      for(let i=0; i<values[index]; i++){
-        createCubeFrame(cubeIndex, 0, 0, 0, contentGroupContainer[jarIndex], colorPalette[paletteIndex]);
-        cubeIndex += 1;
-      }
-    }
-    if(index === 3){
-      textArr.push(item + ': ' + Math.floor((values[index]/(60*60))*10)/10 + ' h');
-    }else{
-      textArr.push(item + ': ' + values[index]);
-    }
-  });
-
-  cubeIndex = 0;
-  // const textLable = createTextPlane(textArr, { x: centerX, y: centerY-0.4, z: centerZ+1+(sizeTemXZ-1) });
-  const textLable = createTextPlane(textArr, { x: centerX, y: centerY-0.4, z: centerZ+1 });
-  const jarrr = jar.clone();
-
-  
-  // jarrr.scale.set(sizeTemXZ, sizeTempY, sizeTemXZ);
-
-  // jarrr.position.set(centerX, centerY+(sizeTempY-1), centerZ);
-  jarrr.position.set(centerX, centerY, centerZ);
-  unitContainer.add(jarrr);
-  unitContainer.add(contentGroupContainer[jarIndex]);
-  unitContainer.add(textLable);
-  // unitOne.rotation.y = -0.55;
-}
-
+// Auxiliary function for color format conversion. This part is all generated by ChatGPT.
 function hexToRgb(hex) {
   return {
     r: (hex >> 16) & 0xff,
@@ -658,21 +862,12 @@ function hexToRgb(hex) {
   };
 }
 
+// Auxiliary function for color format conversion. This part is all generated by ChatGPT.
 function rgbToHex(rgb) {
   return (rgb.r << 16) | (rgb.g << 8) | rgb.b; // 返回数字类型
 }
 
-function calculateColorDelta(colorA, colorB) {
-  const rgbA = hexToRgb(colorA);
-  const rgbB = hexToRgb(colorB);
-
-  return {
-    r: rgbB.r - rgbA.r,
-    g: rgbB.g - rgbA.g,
-    b: rgbB.b - rgbA.b,
-  };
-}
-
+// Auxiliary function for color format conversion. This part is all generated by ChatGPT.
 function hslToRgbHex(h, s, l) {
   s /= 100;
   l /= 100;
@@ -704,21 +899,34 @@ function hslToRgbHex(h, s, l) {
   return rgbToHex({ r, g, b });
 }
 
+// Auxiliary function for calculate color difference. This part is all generated by ChatGPT.
+function calculateColorDelta(colorA, colorB) {
+  const rgbA = hexToRgb(colorA);
+  const rgbB = hexToRgb(colorB);
+
+  return {
+    r: rgbB.r - rgbA.r,
+    g: rgbB.g - rgbA.g,
+    b: rgbB.b - rgbA.b,
+  };
+}
+
+// split Array to fit unit group & cube count. This part is all generated by ChatGPT.
 function splitArray(arr) {
   const result = [];
-  let [a, b, c, parm] = arr; // 解构前三个数和parm
+  let [a, b, c, parm] = arr; // Deconstruct the first three numbers and parm
 
   while (a > 0 || b > 0 || c > 0) {
-      // 计算当前可用的总和，使其不大于20
+      // Calculate the current available total so that it is no greater than 20
       const sum = Math.min(20, a + b + c);
-      const newA = Math.min(a, sum); // 当前A分配的值
-      const newB = Math.min(b, sum - newA); // 当前B分配的值
-      const newC = Math.min(c, sum - newA - newB); // 当前C分配的值
+      const newA = Math.min(a, sum); // The value currently assigned to A
+      const newB = Math.min(b, sum - newA); // The value currently assigned to B
+      const newC = Math.min(c, sum - newA - newB); // The current value of C assignment
 
-      // 将当前分配的数组推入结果
+      // Push the currently allocated array into result
       result.push([newA, newB, newC, parm]);
 
-      // 更新剩余的数值
+      // Update the remaining values
       a -= newA;
       b -= newB;
       c -= newC;
@@ -727,38 +935,7 @@ function splitArray(arr) {
   return result;
 }
 
-function changeData(){
-  if(senceSelector === 0){
-    senceSelector = 1;
-    changeDispalyButton.innerHTML = 'Go to Counter';
-  }else if(senceSelector === 1){
-    senceSelector = 0;
-    changeDispalyButton.innerHTML = 'Go to Timer';
-  }
-
-  if(data_is_loaded){
-    if(!circularToggle.checked){
-      if(senceSelector === 0){
-        if(dataDisplayIndex > allCounterKey.length-1){
-          dataDisplayIndex = allCounterKey.length-1;
-          targetXOffset = (allCounterKey.length-1)*-4;
-          console.log('nonono');
-        }
-        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
-        dataDisplayText.style.color = 'rgb(195, 195, 210)';
-      }else if(senceSelector === 1){
-        if(dataDisplayIndex > allTimerKey.length-1){
-          dataDisplayIndex = allTimerKey.length-1;
-          targetXOffset = (allTimerKey.length-1)*-4;
-          console.log('nonono');
-        }
-        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
-        dataDisplayText.style.color = 'rgb(195, 195, 210)';
-      }
-    }
-  }
-}
-
+// Auxiliary function for miliseconds to hours
 function mili2Hour(miliseconds){
   let hoursArry = [];
   miliseconds.forEach(time => {
@@ -767,6 +944,7 @@ function mili2Hour(miliseconds){
   return hoursArry;
 }
 
+// miliseconds to hours
 function convertTimersToHours(allTimers, mili2Hour) {
   return allTimers.map(timerSet => {
       const convertedTimes = mili2Hour(timerSet.slice(0, 3));
@@ -774,26 +952,26 @@ function convertTimersToHours(allTimers, mili2Hour) {
   });
 }
 
-
+// set jars to a circle and no overlays. This part is simplify and rewrite by ChatGPT.
 function positionMeshesOnCircle(meshArray) {
   const totalGroups = meshArray.length;
-  const cubeSize = 0.5; // 根据实际方块尺寸调整
+  const cubeSize = 0.5;
 
-  // 计算每个组的每一行方块数量
+  // Count the number of blocks in each row of each group
   const groupRows = meshArray.map(group => {
       const numCubes = group.children.length;
       return getCubesPerRow(numCubes);
   });
 
-  // 找出所有组中最大的行数
+  // Find the maximum number of rows in all groups
   const maxRows = Math.max(...groupRows.map(rows => rows.length));
 
-  const angleStep = (2 * Math.PI) / totalGroups; // 等距排列的角度间隔
+  const angleStep = (2 * Math.PI) / totalGroups; // Equidistant angular spacing
   let maxRadius = 0;
 
-  // 对每一行进行计算
+  // Calculate for each row
   for (let rowIndex = 0; rowIndex < maxRows; rowIndex++) {
-      // 计算当前行中每个组的宽度
+      // Calculate the width of each group in the current row
       const groupWidthsAtRow = [];
       for (let i = 0; i < totalGroups; i++) {
           const rows = groupRows[i];
@@ -805,13 +983,13 @@ function positionMeshesOnCircle(meshArray) {
           groupWidthsAtRow.push(groupWidthAtRow);
       }
 
-      // 当前行中最大的组宽度
+      // The maximum group width in the current row
       const maxGroupWidthAtRow = Math.max(...groupWidthsAtRow);
 
-      // 计算当前行所需的最小半径
+      // Calculate the minimum radius required for the current line
       const radiusRow = (maxGroupWidthAtRow / 2) / Math.sin(angleStep / 2);
 
-      // 更新最大半径
+      // Update maximum radius
       if (radiusRow > maxRadius) {
           maxRadius = radiusRow;
       }
@@ -821,17 +999,18 @@ function positionMeshesOnCircle(meshArray) {
   }
   arrangeRadius = maxRadius;
 
-  // 使用计算出的最大半径来设置每个组的位置
+  // Use the calculated maximum radius to set the position of each group
   for (let i = 0; i < totalGroups; i++) {
       const angle = i * angleStep;
       const x = maxRadius * Math.cos(angle);
       const z = maxRadius * Math.sin(angle);
 
       meshArray[i].position.set(x, 0, z);
-      meshArray[i].lookAt(0, 0, 0); // 使每个组朝向圆心
+      meshArray[i].lookAt(0, 0, 0);
   }
 }
 
+// Auxiliary function for get row infor
 function getCubesPerRow(numCubes) {
   let rows = [];
   let row = 1;
@@ -848,6 +1027,7 @@ function getCubesPerRow(numCubes) {
   return rows;
 }
 
+// return a joint & modified arr for mid text data display
 function makeDisplayArray(allKeys, allValues, valueMod = 1, endUnit = ''){
   let outputArray = [];
   let unitArray = [];
@@ -855,7 +1035,7 @@ function makeDisplayArray(allKeys, allValues, valueMod = 1, endUnit = ''){
     unitArray = [];
     keys.forEach((key, pndex) => {
       if(pndex === 3){
-        unitArray.push(key + ': ' + Math.round(allValues[index][pndex]*10/3600)/10 + ' hrs.');
+        unitArray.push('Duration' + ': ' + Math.round(allValues[index][pndex]*10/3600)/10 + ' hrs.');
       }else{
         unitArray.push(key + ': ' + Math.round(allValues[index][pndex]*10/valueMod)/10 + endUnit);
       }
@@ -865,6 +1045,7 @@ function makeDisplayArray(allKeys, allValues, valueMod = 1, endUnit = ''){
   return outputArray;
 }
 
+// calculate duration based on logged runtime. This part is simplify and rewrite by ChatGPT.
 function runTime2Duration(allValue) {
   const result = allValue.map((timer, index, array) => {
       const newTimer = [...timer];
@@ -877,64 +1058,7 @@ function runTime2Duration(allValue) {
   return result;
 }
 
-function switchArrangeMod(){
-  if(data_is_loaded){
-    expErrorMessage.innerHTML = '';
-    if(circularToggle.checked){
-      circularText.style.color = 'rgb(66, 66, 68)';
-      dataDisplayText.innerHTML = ['- : -', '- : -', '- : -'].join('<br>')
-
-      disable_keyInput = true;
-      moveSpeed = 1;
-      if(senceSelector === 0){
-        BIGGroup_Counter.position.x = -4*dataDisplayIndex;
-      }else if(senceSelector === 1){
-        BIGGroup_Timer.position.x = -4*dataDisplayIndex;
-      }
-      targetXOffset = 0;
-      dataDisplayIndex = 0;
-
-      unitGroup_Counter.forEach(Counter => {
-        resetToWorldOrigin(Counter);
-      });
-      unitGroup_Timer.forEach(Timer =>{
-        resetToWorldOrigin(Timer);
-      })
-
-      setTimeout(() => {
-        positionMeshesOnCircle(unitGroup_Counter);
-        positionMeshesOnCircle(unitGroup_Timer);
-      }, 10)
-
-    }else{
-      circularText.style.color = 'rgb(195, 195, 210)';
-
-      if(senceSelector === 0){
-        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
-        dataDisplayText.style.color = 'rgb(195, 195, 210)';
-      }else if(senceSelector === 1){
-        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
-        dataDisplayText.style.color = 'rgb(195, 195, 210)';
-      }
-      
-      moveSpeed = 0.05;
-      disable_keyInput = false;
-      unitGroup_Counter.forEach((Counter, index) => {
-        resetToWorldOrigin(Counter);
-        Counter.position.set(index*4, 0, 0);
-      });
-      unitGroup_Timer.forEach((Timer, index) =>{
-        resetToWorldOrigin(Timer);
-        Timer.position.set(index*4, 0, 0);
-      })
-
-    }
-  }else{
-    circularToggle.checked = false;
-    expErrorMessage.innerHTML = 'Load data first';
-  }
-}
-
+// reset xyz to word 0,0,0. This part is all generated by ChatGPT.
 function resetToWorldOrigin(object) {
   if (!object || !(object instanceof THREE.Object3D)) {
       console.error("Invalid object. Please provide a valid THREE.Object3D instance.");
@@ -973,52 +1097,4 @@ function resetToWorldOrigin(object) {
 
   // Ensure the object matrix is updated
   object.updateMatrixWorld(true);
-}
-
-function diviceInputUpdate(reciveIndex, value){
-  if(reciveIndexCount < reciveIndex){
-    reciveIndexCount = reciveIndex;
-    
-    let arrayLenth = 0;
-    if(senceSelector === 0){
-      arrayLenth = allCounterKey.length-1;
-    }else if(senceSelector === 1){
-      arrayLenth = allTimerKey.length-1;
-    }
-
-    if (value === 3 && !disable_keyInput) {
-      if(dataDisplayIndex <= 0){
-        targetXOffset = -arrayLenth*4;
-        dataDisplayIndex = arrayLenth;
-      }else{
-        targetXOffset += 4;
-        dataDisplayIndex -= 1;
-      }
-
-      if(senceSelector === 0){
-        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
-      }else if(senceSelector === 1){
-        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
-      }
-
-    } else if (value === 1 && !disable_keyInput) {
-      if(dataDisplayIndex >= arrayLenth){
-        targetXOffset = 0;
-        dataDisplayIndex = 0;
-      }else{
-        dataDisplayIndex += 1;
-        targetXOffset -= 4;
-      }
-
-      if(senceSelector === 0){
-        dataDisplayText.innerHTML = displayText_counter[dataDisplayIndex].join('<br>');
-      }else if(senceSelector === 1){
-        dataDisplayText.innerHTML = displayText_timer[dataDisplayIndex].join('<br>');
-      }
-
-    } else if (value === 2) {
-      changeData();
-    }
-    console.log(reciveIndex, value, dataDisplayIndex);
-  }
 }

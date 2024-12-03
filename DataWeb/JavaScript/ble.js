@@ -1,6 +1,18 @@
-// import { targetOP } from '../JavaScript/3js.js';
+/*
+Acknowledgment: 
+    ble.js is partly adapted from "Rui Santos & Sara Santos - Random Nerd Tutorials"
+    Details at https://randomnerdtutorials.com/esp32-web-bluetooth/
 
-// DOM Elements
+LLMDiscloser:
+    Code created using generative tools will be clearly marked in comments.
+
+ToDoList:
+    + Invastage json as transfer format
+    + Change sending methord from 4 lines as a packet to streaming all at once
+    + Uniform variable naming with Arduino & 3js.js
+*/
+
+// get doc elements
 const connectButton = document.getElementById('connectBleButton');
 const disconnectButton = document.getElementById('disconnectBleButton');
 const bleStateContainer = document.getElementById('bleState');
@@ -10,17 +22,17 @@ const input2 = document.getElementById('input2');
 const input3 = document.getElementById('input3');
 const submitButton = document.getElementById('submitButton');
 
-// Define BLE Device Specs
+// define BLE UUID
 const deviceName = 'DataGadget';
 const bleService = '19b10000-e8f2-537e-4f6c-d104768a1214';
 const TIMER_CUSTOM_NAME_CHARACTERISTIC_UUID = '19b10001-e8f2-537e-4f6c-d104768a1214';
 const fileCharacteristic = '19b10003-e8f2-537e-4f6c-d104768a1214';
 const INPUT_CHARACTERISTIC_UUID = '19b10004-e8f2-537e-4f6c-d104768a1214';
 
+// regex generated using ChatGTP for remove OLED library unsupported characters & data divider ":"
 const restrictionRegex = /^[^\u4e00-\u9fa5:]*$/;
 
-
-// Global Variables to Handle Bluetooth
+// global Variables to Handle Bluetooth
 let bleServer;
 let bleServiceFound;
 let fileCharacteristicObj;
@@ -30,51 +42,64 @@ let nameChangeTarget = 1;
 let lastFileTime = Date.now();
 let is_first_DataPack = true;
 let timer = null;
+
+// export var for 3js.js to update divice input
 export let recivedValue = 0;
 export let inputRecivedIndex = 0;
-
-// Total keys and values arrays
 export let data_is_loaded = false;
+
+// total keys and values arrays for recive & export
+// keys & values for Timer
 export const totalKeys = [];
 const totalValues = [];
 export let totalValues_2num = [];
-
+// keys & values for Counter
 export const totalKeys_1 = [];
 const totalValues_1 = [];
 export let totalValues_1_2num = [];
 
-// Event Listeners
+// event Listeners
 connectButton.addEventListener('click', connectToDevice);
 disconnectButton.addEventListener('click', disconnectDevice);
 submitButton.addEventListener('click', handleSubmit);
+radioButtons.forEach(radio => {
+    radio.addEventListener('change', () => {
+        clearInputs();
+        radioButtons.forEach(btn => {
+            if (btn.checked) {
+                nameChangeTarget = btn.value;
+                console.log(nameChangeTarget);
+            }
+        });
+    });
+});
 
-// Connect to BLE Device
+// connect to BLE Device
 async function connectToDevice() {
     try {
         const device = await navigator.bluetooth.requestDevice({
             filters: [{ name: deviceName }],
             optionalServices: [bleService]
         });
-
+        // connected
         bleServer = await device.gatt.connect();
         console.log("Connected to GATT Server");
         bleStateContainer.innerHTML = 'Connected to ' + device.name;
         bleStateContainer.style.color = "#24af37";
-
+        // get GATT
         bleServiceFound = await bleServer.getPrimaryService(bleService);
         console.log("Connected to service:", bleServiceFound.uuid);
-
-        // Set Up Notifications for File Characteristic (New Functionality)
+        // service for keys & values recive
         fileCharacteristicObj = await bleServiceFound.getCharacteristic(fileCharacteristic);
         await fileCharacteristicObj.startNotifications();
         fileCharacteristicObj.addEventListener('characteristicvaluechanged', handleFileData);
         console.log('FILE characteristic started.');
-
+        // service for divice input recive
         inputCharacteristic = await bleServiceFound.getCharacteristic(INPUT_CHARACTERISTIC_UUID);
         await inputCharacteristic.startNotifications();
         inputCharacteristic.addEventListener('characteristicvaluechanged', diviceInput);
         console.log('INPUT characteristic started.');
-
+        // service for name upload
         nameTimerCharacteristic = await bleServiceFound.getCharacteristic(TIMER_CUSTOM_NAME_CHARACTERISTIC_UUID);
         console.log('TIMER_CUSTOM_NAME characteristic started.');
 
@@ -83,6 +108,7 @@ async function connectToDevice() {
     }
 }
 
+// function for change names
 function handleSubmit(event){
     event.preventDefault();
 
@@ -129,11 +155,11 @@ function handleSubmit(event){
     }
 
     if (isValid) {
-        // Proceed to submit the data
         submitBLE();
     }
 }
 
+// function for clean input after change name change target
 function clearInputs(){
     const inputs = ["input1", "input2", "input3"].map(id => document.getElementById(id));
     inputs.forEach(input => {
@@ -141,6 +167,7 @@ function clearInputs(){
     });
 }
 
+// function for send name to divice. This part is mostly generated by ChatGPT.
 function submitBLE() {
     if (bleServer && bleServer.connected && nameTimerCharacteristic) {
         const val1 = input1.value.trim();
@@ -168,19 +195,20 @@ function submitBLE() {
     }
 }
 
-// Disconnect BLE Device
+// disconnect BLE Device
 function disconnectDevice() {
     if (bleServer && bleServer.connected) {
         bleServer.disconnect();
         is_first_DataPack = true;
         alert("Gadget disconnected");
         bleStateContainer.innerHTML = "Disconnected";
+        bleStateContainer.style.color = '#d13a30';
     } else {
         alert("No Gadget to disconnect");
     }
 }
 
-// Handle Incoming File Data (New Functionality)
+// handle incoming keys & values. This part is mostly generated by ChatGPT.
 function handleFileData(event) {
     if (handleFileData.uploadSelector === undefined) {
         handleFileData.uploadSelector = 0;
@@ -199,7 +227,7 @@ function handleFileData(event) {
     
     // Parse the data
     const lines = value.trim().split('\n');
-    if (lines.length !== 4) { // Assuming each data pack should have exactly 4 lines
+    if (lines.length !== 4) { 
         console.warn('Incomplete data pack');
         return;
     }
@@ -247,31 +275,7 @@ function handleFileData(event) {
     lastFileTime = currentTime;
 }
 
-radioButtons.forEach(radio => {
-    radio.addEventListener('change', () => {
-        clearInputs();
-        radioButtons.forEach(btn => {
-            if (btn.checked) {
-                nameChangeTarget = btn.value;
-                console.log(`choose: ${btn.value}`);
-                console.log(nameChangeTarget);
-            }
-        });
-    });
-});
-
-
-function validateInput(input) {
-    const value = input.value;
-    if (!restrictionRegex.test(value)) {
-        return 'Name cannot contain the symbol ":" or uncommon characters.';
-    }
-    if (value.length > 20) {
-        return "Name length cannot exceed 20 characters.";
-    }
-    return null;
-}
-
+// function to update export values based on divice input
 function diviceInput(event){
     inputRecivedIndex += 1;
     const value = event.target.value;
@@ -280,6 +284,7 @@ function diviceInput(event){
     console.log(recivedValue);
 }
 
+// function for detect suspend data transfer to separate counter data form timer data. This part is all generated by ChatGPT.
 async function triggerDataLoaded() {
     if (timer) {
       clearTimeout(timer);

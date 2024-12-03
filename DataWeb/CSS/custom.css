@@ -38,6 +38,7 @@
     margin-bottom: 7px;
   }
 
+  /* following switch css is adapted from https://www.w3schools.com/howto/howto_css_switch.asp */
   .switch {
     position: relative;
     display: inline-block;
@@ -89,7 +90,6 @@
     transform: translateX(26px);
   }
   
-  /* Rounded sliders */
   .slider.round {
     border-radius: 34px;
   }
@@ -104,6 +104,7 @@
     gap: 10px; 
   }
 
+  /* following rainbow text effect css is generated using ChatGTP */
   .rainbow-text {
     background: linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet, red);
     background-size: 300%;

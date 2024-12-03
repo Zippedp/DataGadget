@@ -1,9 +1,16 @@
+<!--
+  LLMDiscloser:
+    Code created using generative tools will be clearly marked in comments.
+  ToDoList:
+    + adp npm build methord for long lasting web app
+-->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rotating Cube with Three.js</title>
+  <title>DataGadget WEB APP</title>
   <script type="importmap">
     {
       "imports": {
@@ -17,6 +24,7 @@
   <link rel="stylesheet" type="text/css" href="../CSS/custom.css">
 </head>
 <body style="margin: 0; overflow: hidden;">
+  <!-- main menu -->
   <div class="content">
     <div>
       <label class="toggle-container">
@@ -60,12 +68,15 @@
     <p id="expErrorMessage" style="color: rgb(195, 195, 210)"></p>
   </div>
 </div>
-<div class="alwaysOnUI">
-  <p id="dataDisplay" style="color: rgb(195, 195, 210);">- : -<br>- : -<br>- : -<br></p>
-  <button class="alwaysOnUI" id="changeDispalyButton">Go to Timer</button>
-</div>
+  <!-- mid UI -->
+  <div class="alwaysOnUI">
+    <p id="dataDisplay" style="color: rgb(195, 195, 210);">- : -<br>- : -<br>- : -<br></p>
+    <button class="alwaysOnUI" id="changeDispalyButton">Go to Timer</button>
+  </div>
+  <!-- canvas for 3js -->
   <canvas class="webgl"></canvas>
 </body>
+<!-- js for show/hide main memu -->
 <script>
   const ToggleSwitch = document.getElementById('ToggleSwitch');
   const contentDiv = document.getElementById('contentDiv');
@@ -83,6 +94,8 @@
     }
   });
 </script>
+<!-- js for bluetooth connection -->
 <script src="../JavaScript/ble.js" type="module"></script>
+<!-- js for jar visuals -->
 <script src="../JavaScript/3js.js" type="module"></script>
 </html>
