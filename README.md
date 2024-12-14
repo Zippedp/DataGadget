@@ -30,6 +30,11 @@ This project currently focuses on self tracking behaviors and habits. The device
 
 The device uses Seeed Xiao ESP32-C3. It is connected to 3 switches, a 0.91" OLED display, a micro SD card reader, and a vibration motor. The main inputs are three buttons, and since the connected pins capable of reading analog signals, the inputs can also be replaced with potentiometers to get more diverse input methods. The main feedback of the device are the OLED display and the vibration. The vibration motor is detachable, so it can also be replaced with other component.
 
+## Attribution
+Neat CSS:
+https://neat.joeldare.com/
+
+Part of the code were written with the assistance of ChatGPT. Assisted parts are marked in comments.
 
 ## License
 <p xmlns:cc="http://creativecommons.org/ns#" xmlns:dct="http://purl.org/dc/terms/"><a property="dct:title" rel="cc:attributionURL" href="https://github.com/Zippedp/DataGadget">DataGadget</a> by <span property="cc:attributionName">Zeyu Jiao</span> is licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/?ref=chooser-v1" target="_blank" rel="license noopener noreferrer" style="display:inline-block;">CC BY-NC-SA 4.0 <img style="height:22px!important;margin-left:3px;vertical-align:text-bottom;" src="https://mirrors.creativecommons.org/presskit/icons/cc.svg?ref=chooser-v1" alt=""><img style="height:22px!important;margin-left:3px;vertical-align:text-bottom;" src="https://mirrors.creativecommons.org/presskit/icons/by.svg?ref=chooser-v1" alt=""><img style="height:22px!important;margin-left:3px;vertical-align:text-bottom;" src="https://mirrors.creativecommons.org/presskit/icons/nc.svg?ref=chooser-v1" alt=""><img style="height:22px!important;margin-left:3px;vertical-align:text-bottom;" src="https://mirrors.creativecommons.org/presskit/icons/sa.svg?ref=chooser-v1" alt=""></a></p>
