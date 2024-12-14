@@ -34,6 +34,9 @@ The device uses Seeed Xiao ESP32-C3. It is connected to 3 switches, a 0.91" OLED
 Neat CSS:
 https://neat.joeldare.com/
 
+Wiring diagram drawn using:
+https://wokwi.com/
+
 Part of the code were written with the assistance of ChatGPT. Assisted parts are marked in comments.
 
 ## License
