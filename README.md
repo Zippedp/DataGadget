@@ -9,8 +9,10 @@ This project currently focuses on self tracking behaviors and habits. The device
 
 ## Repositorie structure
 + DataGadget_ArduinoIDE/main
++ 
     The archived version. Using ArduinoIDE as the compile and upload methord. There were an environment configuration problem in PlatformIO for a while that prevented the code from being compiled correctly.
 + DataGadget_PCB
++ 
     PCB production file for the device.
 + DataGadget_PlatformIO
 	+ DataGadget_PlatformIO/lib
@@ -18,8 +20,10 @@ This project currently focuses on self tracking behaviors and habits. The device
 	+ DataGadget_PlatformIO/src
 		Main code for Arduino.
 + DataGadget_Printable
-    + 3D printing files.
++ 
+	3D printing files.
 + DataWeb
++ 
 	Code and 3D resources for web visualization APP.
 + Image
   
